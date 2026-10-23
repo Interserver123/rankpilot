@@ -3,6 +3,8 @@ import { requireStaff } from "@/server/authz";
 import { canOrg } from "@/lib/permissions";
 import { defaultSerpProvider, describeProviders } from "@/server/providers/registry";
 import { PROVIDER_SPECS, credentialStatus, encryptionConfigured } from "@/server/providers/credentials";
+import Link from "next/link";
+import { sql } from "@/server/db";
 import { KeyForm } from "./key-form";
 import { formatMoney } from "@/lib/cost";
 import { Badge, Card, PageHeader } from "@/components/ui";
@@ -15,6 +17,12 @@ export default async function IntegrationsPage() {
   const providers = describeProviders();
   const active = defaultSerpProvider();
   const hasEncryptionKey = encryptionConfigured();
+  const [{ n: budgets } = { n: 0 }] = await sql<{ n: number }[]>`select count(*)::int as n from budgets where organization_id = ${user.organizationId}`;
+  const steps = [
+    { done: hasEncryptionKey, title: "Add APP_ENCRYPTION_KEY", body: "Vercel → Settings → Environment Variables. Any random 32+ character value, then redeploy. Keep a copy: if it changes, saved keys must be re-entered." },
+    { done: Boolean(active), title: "Add and test a provider key", body: "Paste the key into YepAPI or DataForSEO below → Save → Test connection. YepAPI keys: yepapi.com/dashboard/api-keys." },
+    { done: budgets > 0, title: "Set a monthly budget", body: "Usage & Costs → Budgets, before adding many keywords. Blocks or asks approval when spend would pass the limit.", href: "/usage", cta: "Open Usage & Costs" },
+  ];
   const planned = [
     { name: "Google Search Console", phase: "Phase 4", note: "OAuth 2.0 with the read-only webmasters scope; property selected per project." },
     { name: "Google Analytics 4", phase: "Phase 4", note: "OAuth 2.0 with the analytics read-only scope; GA4 Data API." },
@@ -25,6 +33,20 @@ export default async function IntegrationsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Integrations" subtitle="API keys are encrypted on the server and never sent back to the browser. A key saved here overrides a server environment variable." />
+      <Card title="Setup guide">
+        <ol className="space-y-3 text-sm">
+          {steps.map((st, i) => (
+            <li key={st.title} className="flex gap-3">
+              <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${st.done ? "bg-good/15 text-good" : "bg-panel-2 text-muted"}`}>{st.done ? "✓" : i + 1}</span>
+              <div>
+                <div className="font-medium">{st.title} {st.done && <Badge tone="good">Done</Badge>}</div>
+                <p className="text-muted">{st.body}</p>
+                {!st.done && st.href && <Link href={st.href} className="mt-1 inline-block text-accent underline">{st.cta}</Link>}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </Card>
       {canSave && !hasEncryptionKey && (
         <div className="rounded-xl border border-warn/40 bg-warn/10 p-4 text-sm">
           <div className="font-semibold">One-time setup before you can save keys</div>
