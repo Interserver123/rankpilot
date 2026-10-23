@@ -19,6 +19,8 @@ export interface DepthPlan {
 export interface DepthPlanOptions {
   maxDepth: number;
   pageSize: number;
+  /** Depth of the very first check of a keyword. */
+  baselineDepth: number;
   /** Depth used for keywords that were not found last time. */
   probeDepth: number;
   /** A keyword not found is re-checked at full depth at least this often. */
@@ -30,7 +32,7 @@ export interface DepthPlanOptions {
   now: Date;
 }
 
-export const DEFAULT_DEPTH_OPTIONS = { pageSize: 10, probeDepth: 30, fullCheckDays: 28, bufferRanks: 5 } as const;
+export const DEFAULT_DEPTH_OPTIONS = { pageSize: 10, baselineDepth: 30, probeDepth: 30, fullCheckDays: 28, bufferRanks: 5 } as const;
 
 const roundUp = (n: number, page: number) => Math.ceil(n / page) * page;
 
@@ -38,7 +40,7 @@ export function planDepth(prev: PrevObservation | null, lastFullDepthAt: Date | 
   const floor = o.competitorFloor ? Math.min(o.maxDepth, roundUp(o.competitorFloor, o.pageSize)) : 0;
   const withFloor = (plan: DepthPlan): DepthPlan =>
     plan.depth >= floor ? plan : { depth: floor, reason: "competitor_floor", escalate: plan.escalate && floor < o.maxDepth };
-  if (!prev) return { depth: o.maxDepth, reason: "baseline", escalate: false };
+  if (!prev) return withFloor({ depth: Math.min(o.maxDepth, roundUp(o.baselineDepth, o.pageSize)), reason: "baseline", escalate: false });
   if (prev.status === "ranked" && prev.position !== null) {
     const depth = Math.min(o.maxDepth, roundUp(prev.position + o.bufferRanks, o.pageSize));
     return withFloor({ depth, reason: "near_last_rank", escalate: depth < o.maxDepth });

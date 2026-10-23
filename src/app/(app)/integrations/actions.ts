@@ -6,7 +6,7 @@ import { sql } from "@/server/db";
 import { audit } from "@/server/audit";
 import { rateLimit } from "@/server/rate-limit";
 import { providerSpec, removeProviderCredentials, saveProviderCredentials } from "@/server/providers/credentials";
-import { testProviderConnection } from "@/server/providers/test-connection";
+import { testProviderConnection, testYepApiSearch, type SearchTestResult } from "@/server/providers/test-connection";
 
 export interface KeyState { ok?: boolean; error?: string; message?: string }
 
@@ -55,4 +55,18 @@ export async function removeKeysAction(_prev: KeyState, form: FormData): Promise
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not remove" };
   }
+}
+
+export interface SearchTestState { result?: SearchTestResult; error?: string }
+
+export async function testSearchAction(_prev: SearchTestState, form: FormData): Promise<SearchTestState> {
+  const user = await requireStaff("integration.manage");
+  if (!rateLimit(`searchtest:${user.id}`, 10, 60_000).ok) return { error: "Too many tests. Try again in a minute." };
+  const t = (k: string) => String(form.get(k) ?? "").trim().slice(0, 120);
+  const keyword = t("keyword");
+  if (!keyword) return { error: "Enter a keyword." };
+  const device = t("device") === "mobile" ? "mobile" : "desktop";
+  const result = await testYepApiSearch({ keyword, countryCode: (t("country") || "US").toUpperCase().slice(0, 2), region: t("region"), city: t("city"), device, domain: t("domain") });
+  await audit(sql, { organizationId: user.organizationId, actorUserId: user.id, action: "integration.search_test", entityType: "provider", entityId: null, metadata: { provider: "yepapi", keyword } });
+  return { result };
 }

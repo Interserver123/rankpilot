@@ -227,7 +227,11 @@ describe("yepapi adapter", () => {
     const r = parseYepApiResponse(ok, req, "country: US");
     expect(r).toMatchObject({ position: 4, rankingUrl: "https://www.acme.com/plumber", unitsConsumed: 3, actualCost: null });
     expect(r.competitors).toEqual([{ id: "c1", position: 1, url: "https://rival.com/x" }]);
-    expect(parseYepApiResponse({ ok: true, data: { items: [] } }, req, "x").position).toBeNull();
+    expect(parseYepApiResponse({ ok: true, data: { items: [{ position: 1, url: "https://rival.com/x" }] } }, req, "x").position).toBeNull();
+    // an empty result list is never recorded as "not ranking"
+    expect(() => parseYepApiResponse({ ok: true, data: { items: [] } }, req, "x")).toThrowError(/no usable results/);
+    // tolerated field aliases
+    expect(parseYepApiResponse({ ok: true, data: { items: [{ rank: 2, link: "https://acme.com/a" }] } }, req, "x").position).toBe(2);
     expect(() => parseYepApiResponse({ ok: false, error: { code: "NO_CREDITS", message: "empty" } }, req, "x")).toThrowError(/empty/);
     expect(classifyYepApiError("INVALID_API_KEY", "x").kind).toBe("auth");
     expect(classifyYepApiError("NO_CREDITS", "x").kind).toBe("insufficient_funds");
@@ -238,10 +242,10 @@ describe("yepapi adapter", () => {
 });
 
 describe("adaptive depth plan", () => {
-  const base = { maxDepth: 100, pageSize: 10, probeDepth: 30, fullCheckDays: 28, bufferRanks: 5, competitorFloor: null, now: new Date("2026-10-23T00:00:00Z") };
+  const base = { maxDepth: 100, pageSize: 10, baselineDepth: 30, probeDepth: 30, fullCheckDays: 28, bufferRanks: 5, competitorFloor: null, now: new Date("2026-10-23T00:00:00Z") };
   it("checks near the last rank, then escalates only on a miss", async () => {
     const { planDepth } = await import("@/lib/depth-plan");
-    expect(planDepth(null, null, base)).toEqual({ depth: 100, reason: "baseline", escalate: false });
+    expect(planDepth(null, null, base)).toEqual({ depth: 30, reason: "baseline", escalate: false });
     expect(planDepth({ status: "ranked", position: 3 }, null, base)).toEqual({ depth: 10, reason: "near_last_rank", escalate: true });
     expect(planDepth({ status: "ranked", position: 8 }, null, base).depth).toBe(20);
     expect(planDepth({ status: "ranked", position: 97 }, null, base)).toMatchObject({ depth: 100, escalate: false });
@@ -252,6 +256,7 @@ describe("adaptive depth plan", () => {
     expect(planDepth(nf, new Date("2026-10-10T00:00:00Z"), base)).toEqual({ depth: 30, reason: "probe", escalate: false });
     expect(planDepth(nf, new Date("2026-08-01T00:00:00Z"), base)).toMatchObject({ depth: 100, reason: "periodic_full" });
     expect(planDepth(nf, null, base).depth).toBe(100);
+    expect(planDepth(null, null, { ...base, baselineDepth: 100 }).depth).toBe(100);
   });
   it("keeps a minimum depth when competitors are tracked", async () => {
     const { planDepth } = await import("@/lib/depth-plan");

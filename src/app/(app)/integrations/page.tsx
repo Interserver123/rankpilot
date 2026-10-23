@@ -6,6 +6,7 @@ import { PROVIDER_SPECS, credentialStatus, encryptionConfigured } from "@/server
 import Link from "next/link";
 import { sql } from "@/server/db";
 import { KeyForm } from "./key-form";
+import { SearchTest } from "./search-test";
 import { formatMoney } from "@/lib/cost";
 import { Badge, Card, PageHeader } from "@/components/ui";
 
@@ -88,6 +89,7 @@ export default async function IntegrationsPage() {
           ))}
         </div>
       </Card>
+      {canSave && PROVIDER_SPECS.some((x) => x.id === "yepapi" && credentialStatus(x.id).source !== "none") && <Card title="Test a search (YepAPI)"><SearchTest /></Card>}
       <Card title="Planned integrations">
         <ul className="space-y-3 text-sm">
           {planned.map((p) => <li key={p.name} className="flex flex-wrap items-center gap-2"><span className="font-medium">{p.name}</span><Badge tone="info">{p.phase}</Badge><span className="text-muted">{p.note}</span></li>)}

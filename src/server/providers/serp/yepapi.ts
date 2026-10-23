@@ -43,7 +43,18 @@ export function buildYepApiBody(req: SerpRequest): { body: Record<string, unknow
   return { body, requestedLocation };
 }
 
-interface YepItem { position?: number; title?: string; url?: string; domain?: string }
+interface YepItem { position?: number; rank?: number; rankAbsolute?: number; rankGroup?: number; title?: string; url?: string; link?: string; domain?: string }
+
+/** Field names are camelCase per the docs; a few aliases are tolerated so a naming difference never reads as "not ranking". */
+export function normalizeYepItems(items: YepItem[] | undefined): OrganicItem[] {
+  const out: OrganicItem[] = [];
+  for (const i of items ?? []) {
+    const position = i.position ?? i.rankGroup ?? i.rankAbsolute ?? i.rank;
+    const url = i.url ?? i.link ?? (i.domain ? `https://${i.domain}/` : undefined);
+    if (typeof position === "number" && typeof url === "string") out.push({ position, url, title: i.title ?? null });
+  }
+  return out;
+}
 
 /** Maps YepAPI error codes to retry policy. Branches on error.code, never on HTTP status alone. */
 export function classifyYepApiError(code: string | undefined, message: string | undefined, retryAfterMs: number | null = null): ProviderError {
@@ -64,9 +75,9 @@ export function parseYepApiResponse(body: unknown, req: SerpRequest, requestedLo
   const b = body as { ok?: boolean; data?: { items?: YepItem[]; totalResults?: number }; error?: { code?: string; message?: string } } | null;
   if (!b || typeof b !== "object") throw new ProviderError("uncertain", "yep_bad_json", "Provider returned an unreadable response");
   if (b.ok !== true) throw classifyYepApiError(b.error?.code, b.error?.message);
-  const organic: OrganicItem[] = (b.data?.items ?? [])
-    .filter((i) => typeof i.position === "number" && typeof i.url === "string")
-    .map((i) => ({ position: i.position!, url: i.url!, title: i.title ?? null }));
+  const organic = normalizeYepItems(b.data?.items);
+  // A successful response with no usable results is not evidence the site is absent: never record it as "not found".
+  if (organic.length === 0) throw new ProviderError("uncertain", "yep_empty_results", "YepAPI returned no usable results for this search; check the location and keyword with Test a search");
   const match = findDomainPosition(organic, req.targetDomain);
   return {
     position: match?.position ?? null,
@@ -82,7 +93,7 @@ export function parseYepApiResponse(body: unknown, req: SerpRequest, requestedLo
     providerRequestId: null,
     unitsConsumed: Math.ceil(req.depth / PAGE_SIZE),
     actualCost: null,
-    metadata: { organic_results: organic.length, total_results: b.data?.totalResults ?? null },
+    metadata: { organic_results: organic.length, total_results: b.data?.totalResults ?? null, top_domains: organic.slice(0, 5).map((o) => { try { return new URL(o.url).hostname; } catch { return o.url; } }) },
     organic,
   };
 }

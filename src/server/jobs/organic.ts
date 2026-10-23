@@ -58,6 +58,7 @@ export async function loadDepthPlans(sql: Sql, provider: SerpProvider, keywordId
   const options = {
     maxDepth,
     pageSize: DEFAULT_DEPTH_OPTIONS.pageSize,
+    baselineDepth: intSetting(provider.id, "baselineDepth", DEFAULT_DEPTH_OPTIONS.baselineDepth, 10, maxDepth),
     probeDepth: intSetting(provider.id, "probeDepth", DEFAULT_DEPTH_OPTIONS.probeDepth, 10, maxDepth),
     fullCheckDays: intSetting(provider.id, "fullCheckDays", DEFAULT_DEPTH_OPTIONS.fullCheckDays, 1, 365),
     bufferRanks: DEFAULT_DEPTH_OPTIONS.bufferRanks,
