@@ -32,6 +32,12 @@ export function classifyDbError(e: unknown): SetupProblem {
   const err = e as { name?: string; code?: string; message?: string };
   if (err?.name === "DatabaseConfigError") return { kind: "no_database_url", detail: "DATABASE_URL is not set for this deployment." };
   const code = err?.code ?? "";
+  if (/Tenant or user not found/i.test(err?.message ?? "")) {
+    return { kind: "cannot_connect", detail: "Supabase rejected the database user. Copy the connection string again from Supabase (user looks like postgres.<project-ref>)." };
+  }
+  if (code === "ENETUNREACH" || code === "EHOSTUNREACH") {
+    return { kind: "cannot_connect", detail: `The database host is unreachable (${code}). With Supabase, use the pooler connection string (…pooler.supabase.com), not the direct db.<ref>.supabase.co host.` };
+  }
   if (["ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "CONNECT_TIMEOUT", "28P01", "28000", "3D000", "ECONNRESET"].includes(code)) {
     const why = code === "28P01" || code === "28000" ? "the username or password was rejected"
       : code === "3D000" ? "the database name does not exist"

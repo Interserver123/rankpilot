@@ -84,6 +84,16 @@ Integration tests cover the defaults, dedupe, partial batches, retries, auth-sto
 4. **Provider**: set `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, and your contracted `DATAFORSEO_COST_PER_REQUEST` (leave blank if unknown: estimates then show "unknown" instead of a guess). Never set `PROVIDER_MOCK_ENABLED` in production (it is ignored when `NODE_ENV=production`).
 5. **Budgets**: add an organization-wide budget under **Usage & Costs** before scaling keyword counts.
 
+## Using Supabase as the database
+
+1. Create a project at supabase.com (pick the region closest to your users) and save the database password.
+2. In the project, click **Connect** → **Connection string** → **Transaction pooler** and copy the URI
+   (`postgresql://postgres.<ref>:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:6543/postgres`). Replace `[YOUR-PASSWORD]`; URL-encode special characters in it (e.g. `@` → `%40`).
+3. Set it as `DATABASE_URL` (Cloudflare: `npx wrangler secret put DATABASE_URL`, or Workers → rankpilot → Settings → Variables and Secrets → add secret).
+4. Redeploy and open `/api/health`; tables are created automatically on first request.
+
+TLS is enabled automatically for Supabase hosts, and prepared statements are disabled on the transaction pooler (port 6543). Supabase is only the database here; sign-in uses RankPilot's built-in accounts unless you also set the Supabase Auth keys.
+
 ## Deploying to Cloudflare Workers
 
 ```bash

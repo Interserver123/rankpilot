@@ -21,16 +21,36 @@ export const isCloudflareWorkers = typeof navigator !== "undefined" && navigator
 
 export class DatabaseConfigError extends Error { override name = "DatabaseConfigError"; }
 
+/**
+ * Connection options derived from the URL. Supabase requires TLS; its transaction pooler
+ * (port 6543) does not support prepared statements.
+ */
+export function connectionOptions(url: string): { ssl: "require" | false; prepare: boolean } {
+  let host = "", port = "", sslmode: string | null = null;
+  try {
+    const u = new URL(url);
+    host = u.hostname; port = u.port; sslmode = u.searchParams.get("sslmode");
+  } catch {
+    throw new DatabaseConfigError("DATABASE_URL is not a valid connection string");
+  }
+  const supabase = /\.supabase\.(co|com)$/.test(host);
+  return {
+    ssl: sslmode === "disable" ? false : supabase || (sslmode !== null && sslmode !== "prefer" && sslmode !== "allow") ? "require" : false,
+    prepare: port !== "6543",
+  };
+}
+
 function create(perRequest = false): postgres.Sql {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.DATABASE_URL?.trim();
   if (!url) throw new DatabaseConfigError("DATABASE_URL is not set");
+  const opts = connectionOptions(url);
   return postgres(url, {
+    ssl: opts.ssl,
     max: perRequest ? 1 : Number(process.env.DATABASE_POOL_SIZE ?? 10),
     idle_timeout: perRequest ? 5 : 30,
     connect_timeout: 10,
     onnotice: () => {},
-    // Supabase's transaction pooler (port 6543) does not support prepared statements.
-    prepare: !url.includes(":6543"),
+    prepare: opts.prepare,
     transform: { undefined: null },
     types: {
       // Return numeric as JS numbers (costs/usage are well within double precision).

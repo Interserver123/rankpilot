@@ -7,6 +7,7 @@ import { dedupeKeywordConfigs, parseKeywordCsv, csvCell, normalizeKeyword } from
 import { canOrg, canProject } from "@/lib/permissions";
 import { normalizeDomain, urlMatchesDomain, isValidDomain } from "@/lib/domain";
 import { backoffDelayMs, parseRetryAfter } from "@/lib/retry";
+import { connectionOptions } from "@/server/db";
 
 describe("schedule", () => {
   const spec = { intervalValue: 7, intervalUnit: "day" as const, preferredRunTime: "06:00", timezone: "America/Chicago" };
@@ -162,5 +163,15 @@ describe("domain & retry", () => {
     expect(parseRetryAfter("120")).toBe(120_000);
     expect(parseRetryAfter("Wed, 21 Oct 2026 07:28:00 GMT", Date.parse("Wed, 21 Oct 2026 07:27:00 GMT"))).toBe(60_000);
     expect(parseRetryAfter(null)).toBeNull();
+  });
+});
+
+describe("database connection options", () => {
+  it("uses TLS for Supabase and disables prepared statements on the transaction pooler", () => {
+    expect(connectionOptions("postgresql://postgres.abc:pw@aws-0-eu-west-1.pooler.supabase.com:6543/postgres")).toEqual({ ssl: "require", prepare: false });
+    expect(connectionOptions("postgresql://postgres:pw@db.abc.supabase.co:5432/postgres")).toEqual({ ssl: "require", prepare: true });
+    expect(connectionOptions("postgres://u:p@localhost:5432/db")).toEqual({ ssl: false, prepare: true });
+    expect(connectionOptions("postgres://u:p@host:5432/db?sslmode=require")).toMatchObject({ ssl: "require" });
+    expect(() => connectionOptions("not a url")).toThrow();
   });
 });
