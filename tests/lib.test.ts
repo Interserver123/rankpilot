@@ -7,7 +7,7 @@ import { dedupeKeywordConfigs, parseKeywordCsv, csvCell, normalizeKeyword } from
 import { canOrg, canProject } from "@/lib/permissions";
 import { normalizeDomain, urlMatchesDomain, isValidDomain } from "@/lib/domain";
 import { backoffDelayMs, parseRetryAfter } from "@/lib/retry";
-import { connectionOptions } from "@/server/db";
+import { alternatePoolerUrl, connectionOptions } from "@/server/db";
 
 describe("schedule", () => {
   const spec = { intervalValue: 7, intervalUnit: "day" as const, preferredRunTime: "06:00", timezone: "America/Chicago" };
@@ -173,5 +173,13 @@ describe("database connection options", () => {
     expect(connectionOptions("postgres://u:p@localhost:5432/db")).toEqual({ ssl: false, prepare: true });
     expect(connectionOptions("postgres://u:p@host:5432/db?sslmode=require")).toMatchObject({ ssl: "require" });
     expect(() => connectionOptions("not a url")).toThrow();
+  });
+});
+
+describe("supabase pooler fallback", () => {
+  it("swaps between aws-0 and aws-1 clusters only for Supabase poolers", () => {
+    expect(alternatePoolerUrl("postgresql://u.ref:p@aws-0-ap-south-1.pooler.supabase.com:6543/postgres")).toBe("postgresql://u.ref:p@aws-1-ap-south-1.pooler.supabase.com:6543/postgres");
+    expect(alternatePoolerUrl("postgresql://u.ref:p@aws-1-ap-south-1.pooler.supabase.com:6543/postgres")).toContain("aws-0-");
+    expect(alternatePoolerUrl("postgres://u:p@localhost:5432/db")).toBeNull();
   });
 });

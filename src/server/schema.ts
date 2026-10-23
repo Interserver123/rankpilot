@@ -1,4 +1,4 @@
-import type { Sql } from "./db";
+import { useAlternatePooler, type Sql } from "./db";
 import { MIGRATIONS } from "./migrations.generated";
 
 let ensured = false;
@@ -9,6 +9,20 @@ let ensured = false;
  */
 export async function ensureSchema(sql: Sql): Promise<{ applied: string[] }> {
   if (ensured) return { applied: [] };
+  try {
+    return await applyPending(sql);
+  } catch (e) {
+    // Wrong Supabase pooler cluster (aws-0 vs aws-1): retry once on the other one.
+    const err = e as { code?: string; message?: string };
+    if ((/Tenant or user not found/i.test(err.message ?? "") || err.code === "ENOTFOUND") && (await useAlternatePooler())) {
+      console.warn("[db] retrying on the alternate Supabase pooler cluster");
+      return applyPending(sql);
+    }
+    throw e;
+  }
+}
+
+async function applyPending(sql: Sql): Promise<{ applied: string[] }> {
   const applied: string[] = [];
   await sql.begin(async (tx) => {
     await tx`select pg_advisory_xact_lock(hashtext('rankpilot-migrations'))`;

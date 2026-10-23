@@ -40,8 +40,32 @@ export function connectionOptions(url: string): { ssl: "require" | false; prepar
   };
 }
 
+/** Set when the alternate Supabase pooler cluster turned out to be the right one. */
+let urlOverride: string | null = null;
+
+export function databaseUrl(): string | null {
+  return urlOverride ?? (process.env.DATABASE_URL?.trim() || null);
+}
+
+/** Supabase pooler hosts live on aws-0-… or aws-1-… clusters; returns the other one. */
+export function alternatePoolerUrl(url: string): string | null {
+  if (/aws-0-[a-z0-9-]+\.pooler\.supabase\.com/.test(url)) return url.replace("aws-0-", "aws-1-");
+  if (/aws-1-[a-z0-9-]+\.pooler\.supabase\.com/.test(url)) return url.replace("aws-1-", "aws-0-");
+  return null;
+}
+
+/** Switch to the alternate pooler cluster for the rest of this process. */
+export async function useAlternatePooler(): Promise<boolean> {
+  const current = databaseUrl();
+  const alt = current ? alternatePoolerUrl(current) : null;
+  if (!alt || urlOverride === alt) return false;
+  urlOverride = alt;
+  if (globalThis.__rankpilotSql) { await globalThis.__rankpilotSql.end({ timeout: 1 }).catch(() => {}); globalThis.__rankpilotSql = undefined; }
+  return true;
+}
+
 function create(perRequest = false): postgres.Sql {
-  const url = process.env.DATABASE_URL?.trim();
+  const url = databaseUrl();
   if (!url) throw new DatabaseConfigError("DATABASE_URL is not set");
   const opts = connectionOptions(url);
   return postgres(url, {
@@ -60,10 +84,10 @@ function create(perRequest = false): postgres.Sql {
 }
 
 /** One client per request on Workers (React `cache` is scoped to the current request). */
-const requestSql = cache(() => create(true));
+const requestSql = cache((_url: string | null) => create(true));
 
 export function getSql(): postgres.Sql {
-  if (isCloudflareWorkers) return requestSql();
+  if (isCloudflareWorkers) return requestSql(databaseUrl());
   if (!globalThis.__rankpilotSql) globalThis.__rankpilotSql = create();
   return globalThis.__rankpilotSql;
 }
