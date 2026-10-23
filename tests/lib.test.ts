@@ -258,3 +258,14 @@ describe("adaptive depth plan", () => {
     expect(planDepth({ status: "ranked", position: 3 }, null, { ...base, competitorFloor: 30 })).toMatchObject({ depth: 30, reason: "competitor_floor", escalate: true });
   });
 });
+
+describe("google domain input", () => {
+  it("accepts pasted URLs and blank, rejects non-Google domains", async () => {
+    const { projectWizardSchema } = await import("@/lib/validation");
+    const loc = (googleDomain: string) => projectWizardSchema.shape.locations.element.safeParse({ name: "A", countryCode: "US", googleDomain });
+    for (const v of ["https://www.google.com/", "Google.co.uk", " google.com ", ""]) expect(loc(v).success, v).toBe(true);
+    expect((loc("https://www.google.com/").data as { googleDomain: string }).googleDomain).toBe("google.com");
+    expect((loc("").data as { googleDomain: string }).googleDomain).toBe("google.com");
+    expect(loc("hawktowingandauto.com").success).toBe(false);
+  });
+});

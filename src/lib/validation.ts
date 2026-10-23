@@ -16,7 +16,11 @@ export const locationSchema = z.object({
   postalCode: optionalText(20),
   latitude: z.coerce.number().min(-90).max(90).optional().or(z.literal("").transform(() => undefined)),
   longitude: z.coerce.number().min(-180).max(180).optional().or(z.literal("").transform(() => undefined)),
-  googleDomain: z.string().trim().regex(/^google\.[a-z.]{2,10}$/, "e.g. google.com or google.co.uk").default("google.com"),
+  googleDomain: z.preprocess(
+    // Accept pasted forms like "https://www.google.com/" or "Google.co.uk"; blank means google.com.
+    (v) => (typeof v === "string" ? (v.trim().toLowerCase().replace(/^[a-z]+:\/\//, "").replace(/^www\./, "").split(/[/?#\s]/)[0] || "google.com") : v),
+    z.string().regex(/^google\.[a-z.]{2,10}$/, "Use a Google domain such as google.com or google.co.uk"),
+  ).default("google.com"),
   googleBusinessProfileReference: optionalText(500),
 }).refine((l) => (l.latitude === undefined) === (l.longitude === undefined), {
   message: "Provide both latitude and longitude, or neither",
