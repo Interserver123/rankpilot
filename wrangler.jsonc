@@ -1,12 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // Cloudflare Workers deployment via OpenNext (`npm run deploy`).
+  // Cloudflare Workers deployment via OpenNext. `npm run build` creates .open-next/,
+  // then `wrangler deploy` (or `npm run deploy`) uploads it.
   // Secrets (DATABASE_URL, provider keys…) are set with `npx wrangler secret put NAME`
   // or in the dashboard: Workers → rankpilot → Settings → Variables and Secrets.
   "name": "rankpilot",
   "main": ".open-next/worker.js",
-  // Build the OpenNext bundle before every deploy, whatever build command ran before it.
-  "build": { "command": "node scripts/cf-build.mjs" },
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },

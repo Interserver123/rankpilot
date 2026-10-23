@@ -38,10 +38,10 @@ jobs:
         run: npx vitest run tests/lib.test.ts
 
       - name: Build for Cloudflare (OpenNext)
-        run: npx opennextjs-cloudflare build
+        run: npm run build
 
       - name: Deploy
-        run: RANKPILOT_SKIP_CF_BUILD=1 npx wrangler deploy
+        run: npx wrangler deploy
 
       - name: Sync DATABASE_URL secret (if provided)
         env:

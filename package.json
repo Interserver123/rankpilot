@@ -2,10 +2,10 @@
   "name": "rankpilot",
   "version": "0.1.0",
   "private": true,
-  "description": "RankPilot — SEO operations, local rank tracking and search intelligence",
+  "description": "RankPilot \u2014 SEO operations, local rank tracking and search intelligence",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "tsx scripts/bundle-migrations.ts && opennextjs-cloudflare build",
     "start": "next start",
     "worker": "tsx --env-file-if-exists=.env.local scripts/worker.ts",
     "migrate": "tsx --env-file-if-exists=.env.local scripts/migrate.ts",
@@ -13,10 +13,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "migrations:bundle": "tsx scripts/bundle-migrations.ts",
-    "prebuild": "tsx scripts/bundle-migrations.ts",
     "predev": "tsx scripts/bundle-migrations.ts",
-    "preview": "opennextjs-cloudflare build && RANKPILOT_SKIP_CF_BUILD=1 opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && RANKPILOT_SKIP_CF_BUILD=1 opennextjs-cloudflare deploy"
+    "preview": "npm run build && opennextjs-cloudflare preview",
+    "deploy": "npm run build && opennextjs-cloudflare deploy",
+    "build:next": "tsx scripts/bundle-migrations.ts && next build"
   },
   "engines": {
     "node": ">=20"
