@@ -1,0 +1,63 @@
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: [claude/youthful-hopper-o9p56z, main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-cloudflare
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check Cloudflare token
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Add the CLOUDFLARE_API_TOKEN repository secret (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: npx vitest run tests/lib.test.ts
+
+      - name: Build for Cloudflare (OpenNext)
+        run: npx opennextjs-cloudflare build
+
+      - name: Deploy
+        run: RANKPILOT_SKIP_CF_BUILD=1 npx wrangler deploy
+
+      - name: Sync DATABASE_URL secret (if provided)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -n "$DATABASE_URL" ]; then
+            printf '%s' "$DATABASE_URL" | npx wrangler secret put DATABASE_URL
+          else
+            echo "No DATABASE_URL repository secret; keeping the Worker's existing value."
+          fi
+
+      - name: Smoke test live site
+        run: |
+          sleep 15
+          for path in /api/health /sign-in; do
+            code=$(curl -s -o body.txt -w '%{http_code}' "https://rankpilot.ratulroyseoexpert.workers.dev$path" || true)
+            echo "$path -> HTTP $code"
+            head -c 400 body.txt | sed 's/<[^>]*>/ /g' | tr -s ' ' ; echo
+          done
