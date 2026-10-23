@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Cloudflare Workers deployment via OpenNext (`npm run deploy`).
+  // Secrets (DATABASE_URL, provider keys…) are set with `npx wrangler secret put NAME`
+  // or in the dashboard: Workers → rankpilot → Settings → Variables and Secrets.
+  "name": "rankpilot",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "observability": { "enabled": true }
+}

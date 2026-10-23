@@ -60,7 +60,7 @@ npm run worker                 # separate terminal: scheduler + job processing
 
 By default RankPilot uses built-in **email + password** sign-in (scrypt-hashed passwords, revocable server-side sessions):
 
-1. Open `/sign-in` on a fresh database: it shows **Set up your workspace**. Enter your name, agency, email and a password (10+ characters). You become the admin.
+1. Open `/sign-in`. On a fresh database it shows **Set up your workspace** for the owner email (`OWNER_EMAIL`, default `ratulroydigital@gmail.com`): enter your name, agency and a password (10+ characters). If the workspace already exists but the owner has no password yet, it shows **Set your owner password** instead. Only the owner email can do either; set `OWNER_SETUP_CODE` to also require a secret code.
 2. Add teammates under **Settings → Team**. Each new member gets a one-time temporary password to share with them; they can change it under **Settings → My account**.
 3. Forgotten passwords: an admin clicks **Reset password** next to the member (this signs them out everywhere).
 
@@ -83,6 +83,19 @@ Integration tests cover the defaults, dedupe, partial batches, retries, auth-sto
 3. **Worker**: run `npm run worker` as a long-lived process (Railway, Fly.io, Render, a VM). Do not run collection inside web requests. Optionally call `GET /api/cron/schedule` with `Authorization: Bearer $CRON_SECRET` from a cron service instead of relying on the worker's scheduler loop.
 4. **Provider**: set `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, and your contracted `DATAFORSEO_COST_PER_REQUEST` (leave blank if unknown: estimates then show "unknown" instead of a guess). Never set `PROVIDER_MOCK_ENABLED` in production (it is ignored when `NODE_ENV=production`).
 5. **Budgets**: add an organization-wide budget under **Usage & Costs** before scaling keyword counts.
+
+## Deploying to Cloudflare Workers
+
+```bash
+npx wrangler secret put DATABASE_URL     # Postgres connection string (Hyperdrive recommended)
+npm run deploy                           # OpenNext build + wrangler deploy (worker name: rankpilot)
+```
+
+- Tables are created automatically on first request (bundled migrations), so no shell access is needed. `GET /api/health` reports database, migration and auth status without exposing secrets.
+- Workers cannot share a database connection between requests, so the app opens one connection per request there. Put **Hyperdrive** in front of Postgres to keep this fast.
+- Password hashing (scrypt) uses ~45 ms of CPU per sign-in: use the Workers **Paid** plan; the free plan's 10 ms CPU limit can reject sign-ins.
+- Workers cannot run the long-lived job worker. Run `npm run worker` on any Node host (VPS, Railway, Fly.io) with the same `DATABASE_URL` to collect rankings on schedule.
+- Local Workers preview: put `DATABASE_URL=…` in `.dev.vars`, then `npm run preview`.
 
 ## Known limitations / next steps
 

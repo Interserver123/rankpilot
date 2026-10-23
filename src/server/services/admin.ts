@@ -42,6 +42,8 @@ export async function addMember(sql: Sql, actor: Actor, email: string, role: Org
     const userId = existing?.id ?? (await tx<{ id: string }[]>`insert into users (email, name) values (${email}, ${email.split("@")[0] ?? null}) returning id`)[0]!.id;
     const [other] = await tx`select 1 from organization_members where user_id = ${userId} and organization_id <> ${actor.organizationId}`;
     if (other) throw new Error("This user belongs to another organization");
+    const [owner] = await tx`select 1 from organizations where id = ${actor.organizationId} and owner_user_id = ${userId}`;
+    if (owner && role !== "admin") throw new Error("The workspace owner is always an admin.");
     await tx`
       insert into organization_members (organization_id, user_id, role) values (${actor.organizationId}, ${userId}, ${role})
       on conflict (organization_id, user_id) do update set role = excluded.role`;
@@ -52,6 +54,8 @@ export async function addMember(sql: Sql, actor: Actor, email: string, role: Org
 export async function removeMember(sql: Sql, actor: Actor, userId: string) {
   if (userId === actor.id) throw new Error("You cannot remove yourself");
   await sql.begin(async (tx) => {
+    const [owner] = await tx`select 1 from organizations where id = ${actor.organizationId} and owner_user_id = ${userId}`;
+    if (owner) throw new Error("The workspace owner cannot be removed.");
     const [{ admins } = { admins: 0 }] = await tx<{ admins: number }[]>`
       select count(*)::int as admins from organization_members where organization_id = ${actor.organizationId} and role = 'admin' and user_id <> ${userId}`;
     if (admins === 0) throw new Error("At least one administrator is required");

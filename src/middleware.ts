@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 
 /** Refreshes the Supabase session cookie on navigation. No-op when Supabase is not configured. */
 export async function middleware(req: NextRequest) {
@@ -7,6 +6,8 @@ export async function middleware(req: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   let res = NextResponse.next({ request: req });
   if (!url || !key) return res;
+  // Loaded only when Supabase is configured, keeping it out of the edge path otherwise.
+  const { createServerClient } = await import("@supabase/ssr");
   const supabase = createServerClient(url, key, {
     cookies: {
       getAll: () => req.cookies.getAll(),

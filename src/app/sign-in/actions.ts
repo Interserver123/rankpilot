@@ -4,7 +4,8 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { authMode, DEV_COOKIE, signDevSession, supabaseServerClient } from "@/server/auth";
-import { AccountError, passwordSignIn, setupFirstAdmin } from "@/server/accounts";
+import { AccountError, claimOwner, passwordSignIn, setupFirstAdmin } from "@/server/accounts";
+import { ownerEmail } from "@/server/owner";
 import { SESSION_COOKIE } from "@/server/sessions";
 import { sql } from "@/server/db";
 import { rateLimit } from "@/server/rate-limit";
@@ -63,10 +64,10 @@ export async function signIn(_prev: SignInState, form: FormData): Promise<SignIn
 
 const setupSchema = z.object({
   name: z.string().trim().min(1, "Enter your name").max(120),
-  email: z.string().trim().email("Enter a valid email"),
   agencyName: z.string().trim().min(1, "Enter your agency name").max(120),
   password: z.string(),
   confirm: z.string(),
+  setupCode: z.string().optional(),
 }).refine((v) => v.password === v.confirm, { message: "Passwords do not match", path: ["confirm"] });
 
 export async function setupAdmin(_prev: SignInState, form: FormData): Promise<SignInState> {
@@ -75,14 +76,41 @@ export async function setupAdmin(_prev: SignInState, form: FormData): Promise<Si
   if (!rateLimit(`setup:${meta.ip}`, 5, 60_000).ok) return { error: "Too many attempts. Try again in a minute." };
   const p = setupSchema.safeParse(Object.fromEntries(form));
   if (!p.success) return { error: p.error.issues[0]?.message };
+  const email = ownerEmail();
   try {
-    await setupFirstAdmin(sql, p.data);
+    await setupFirstAdmin(sql, { ...p.data, email });
   } catch (e) {
     if (e instanceof AccountError) return { error: e.message };
     throw e;
   }
-  const session = await passwordSignIn(sql, p.data.email, p.data.password, meta);
+  const session = await passwordSignIn(sql, email, p.data.password, meta);
   if (!session) return { error: "Account created. Please sign in." };
+  await setSessionCookie(session.token, session.expiresAt);
+  redirect("/?welcome=1");
+}
+
+const claimSchema = z.object({
+  name: z.string().trim().max(120).optional(),
+  password: z.string(),
+  confirm: z.string(),
+  setupCode: z.string().optional(),
+}).refine((v) => v.password === v.confirm, { message: "Passwords do not match", path: ["confirm"] });
+
+/** The owner sets their password for the first time. */
+export async function claimOwnerAction(_prev: SignInState, form: FormData): Promise<SignInState> {
+  if (authMode() !== "password") return { error: "Passwords are managed by your identity provider." };
+  const meta = await clientMeta();
+  if (!rateLimit(`claim:${meta.ip}`, 5, 60_000).ok) return { error: "Too many attempts. Try again in a minute." };
+  const p = claimSchema.safeParse(Object.fromEntries(form));
+  if (!p.success) return { error: p.error.issues[0]?.message };
+  try {
+    await claimOwner(sql, p.data);
+  } catch (e) {
+    if (e instanceof AccountError) return { error: e.message };
+    throw e;
+  }
+  const session = await passwordSignIn(sql, ownerEmail(), p.data.password, meta);
+  if (!session) return { error: "Password saved. Please sign in." };
   await setSessionCookie(session.token, session.expiresAt);
   redirect("/?welcome=1");
 }

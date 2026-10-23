@@ -7,3 +7,6 @@ next-env.d.ts
 .env.local
 .env.*.local
 coverage
+.open-next
+.wrangler
+.dev.vars

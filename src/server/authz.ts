@@ -10,7 +10,14 @@ import { authIdentity, getCurrentUser, type SessionUser } from "./auth";
 export type StaffUser = SessionUser & { organizationId: string; role: OrgRole };
 
 export async function requireUser(): Promise<SessionUser> {
-  const user = await getCurrentUser();
+  let user: SessionUser | null;
+  try {
+    user = await getCurrentUser();
+  } catch (e) {
+    // Database unavailable or not set up: the sign-in page explains what to fix.
+    console.error("[auth] could not load the current user", e);
+    redirect("/sign-in");
+  }
   // Signed in with the auth provider but not invited to the workspace.
   if (!user) redirect((await authIdentity()) ? "/no-access" : "/sign-in");
   return user;

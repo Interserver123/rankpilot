@@ -12,7 +12,7 @@ export default async function SettingsPage() {
   const user = await requireStaff();
   const isAdmin = canOrg(user.role, "member.manage");
   const passwordMode = authMode() === "password";
-  const [org] = await sql<{ name: string; slug: string; plan: string }[]>`select name, slug, plan from organizations where id = ${user.organizationId}`;
+  const [org] = await sql<{ name: string; slug: string; plan: string; owner_user_id: string | null }[]>`select name, slug, plan, owner_user_id from organizations where id = ${user.organizationId}`;
   const members = await sql<{ id: string; email: string; role: string; linked: boolean; created_at: Date }[]>`
     select u.id, u.email, m.role, (u.authentication_user_id is not null or u.password_hash is not null) as linked, m.created_at
     from organization_members m join users u on u.id = m.user_id where m.organization_id = ${user.organizationId} order by m.role, u.email`;
@@ -31,8 +31,8 @@ export default async function SettingsPage() {
         <table className="table mb-4">
           <thead><tr><th>Email</th><th>Role</th><th>Login</th><th>Added</th><th></th></tr></thead>
           <tbody>{members.map((m) => (
-            <tr key={m.id}><td>{m.email}</td><td className="capitalize text-muted">{m.role}</td><td className="text-muted">{m.linked ? (passwordMode ? "Password set" : "Yes") : "Invited"}</td>
-              <td className="text-muted">{formatDateTime(m.created_at)}</td><td className="text-right">{isAdmin && m.id !== user.id && <MemberActions userId={m.id} canReset={passwordMode} />}</td></tr>
+            <tr key={m.id}><td>{m.email}</td><td className="text-muted"><span className="capitalize">{m.role}</span>{org?.owner_user_id === m.id && <span className="ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">Owner</span>}</td><td className="text-muted">{m.linked ? (passwordMode ? "Password set" : "Yes") : "Invited"}</td>
+              <td className="text-muted">{formatDateTime(m.created_at)}</td><td className="text-right">{isAdmin && m.id !== user.id && org?.owner_user_id !== m.id && <MemberActions userId={m.id} canReset={passwordMode} />}</td></tr>
           ))}</tbody>
         </table>
         {isAdmin && <AddMemberForm passwordMode={passwordMode} />}

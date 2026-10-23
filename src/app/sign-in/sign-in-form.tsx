@@ -2,7 +2,7 @@
 
 import { keepValuesOnSubmit } from "@/components/use-keep-form";
 import { useActionState, useState } from "react";
-import { setupAdmin, signIn, type SignInState } from "./actions";
+import { claimOwnerAction, setupAdmin, signIn, type SignInState } from "./actions";
 
 function PasswordInput({ id, name, autoComplete, placeholder }: { id: string; name: string; autoComplete: string; placeholder?: string }) {
   const [show, setShow] = useState(false);
@@ -50,7 +50,21 @@ export function SignInForm({ mode }: { mode: "supabase" | "dev" | "password" }) 
   );
 }
 
-export function SetupForm() {
+function OwnerEmail({ email }: { email: string }) {
+  return (
+    <div>
+      <label className="label" htmlFor="owner-email">Owner email</label>
+      <input id="owner-email" value={email} readOnly className="input bg-panel-2 text-muted" />
+    </div>
+  );
+}
+
+function SetupCode({ show }: { show: boolean }) {
+  if (!show) return null;
+  return <div><label className="label" htmlFor="setupCode">Setup code</label><input id="setupCode" name="setupCode" required autoComplete="off" className="input" /></div>;
+}
+
+export function SetupForm({ ownerEmail, needsCode }: { ownerEmail: string; needsCode: boolean }) {
   const [state, action, pending] = useActionState<SignInState, FormData>(setupAdmin, {});
   return (
     <form onSubmit={keepValuesOnSubmit(action)} className="space-y-4">
@@ -58,12 +72,28 @@ export function SetupForm() {
         <div><label className="label" htmlFor="name">Your name</label><input id="name" name="name" required autoComplete="name" className="input" /></div>
         <div><label className="label" htmlFor="agencyName">Agency name</label><input id="agencyName" name="agencyName" required autoComplete="organization" className="input" /></div>
       </div>
-      <div><label className="label" htmlFor="email">Work email</label><input id="email" name="email" type="email" required autoComplete="email" className="input" /></div>
-      <div><label className="label" htmlFor="password">Password</label><PasswordInput id="password" name="password" autoComplete="new-password" placeholder="At least 10 characters" /></div>
+      <OwnerEmail email={ownerEmail} />
+      <div><label className="label" htmlFor="password">Choose a password</label><PasswordInput id="password" name="password" autoComplete="new-password" placeholder="At least 10 characters" /></div>
       <div><label className="label" htmlFor="confirm">Confirm password</label><PasswordInput id="confirm" name="confirm" autoComplete="new-password" /></div>
+      <SetupCode show={needsCode} />
       <Result state={state} />
       <button className="btn-primary w-full py-2.5" disabled={pending}>{pending ? "Creating workspace…" : "Create workspace"}</button>
-      <p className="text-center text-xs text-faint">You become the administrator. Add your team afterwards in Settings.</p>
+      <p className="text-center text-xs text-faint">This account becomes the owner and administrator. Add your team afterwards in Settings.</p>
+    </form>
+  );
+}
+
+export function ClaimOwnerForm({ ownerEmail, needsCode }: { ownerEmail: string; needsCode: boolean }) {
+  const [state, action, pending] = useActionState<SignInState, FormData>(claimOwnerAction, {});
+  return (
+    <form onSubmit={keepValuesOnSubmit(action)} className="space-y-4">
+      <OwnerEmail email={ownerEmail} />
+      <div><label className="label" htmlFor="name">Your name</label><input id="name" name="name" autoComplete="name" className="input" /></div>
+      <div><label className="label" htmlFor="password">Choose a password</label><PasswordInput id="password" name="password" autoComplete="new-password" placeholder="At least 10 characters" /></div>
+      <div><label className="label" htmlFor="confirm">Confirm password</label><PasswordInput id="confirm" name="confirm" autoComplete="new-password" /></div>
+      <SetupCode show={needsCode} />
+      <Result state={state} />
+      <button className="btn-primary w-full py-2.5" disabled={pending}>{pending ? "Saving…" : "Set password and sign in"}</button>
     </form>
   );
 }
