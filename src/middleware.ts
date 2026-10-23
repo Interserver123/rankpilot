@@ -5,7 +5,7 @@ export async function middleware(req: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   let res = NextResponse.next({ request: req });
-  if (!url || !key) return res;
+  if (process.env.AUTH_PROVIDER !== "supabase" || !url || !key) return res;
   // Loaded only when Supabase is configured, keeping it out of the edge path otherwise.
   const { createServerClient } = await import("@supabase/ssr");
   const supabase = createServerClient(url, key, {

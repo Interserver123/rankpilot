@@ -19,8 +19,13 @@ export interface SessionUser {
   role: OrgRole | null;
 }
 
+/**
+ * Supabase Auth is used only when explicitly requested with AUTH_PROVIDER=supabase (plus its keys).
+ * Hosting integrations (e.g. Vercel's Supabase integration) add NEXT_PUBLIC_SUPABASE_* variables
+ * automatically; those alone must never switch the login method.
+ */
 export function supabaseConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  return process.env.AUTH_PROVIDER === "supabase" && Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }
 
 export function devAuthEnabled(): boolean {
