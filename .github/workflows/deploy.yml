@@ -48,7 +48,11 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           if [ -n "$DATABASE_URL" ]; then
-            printf '%s' "$DATABASE_URL" | npx wrangler secret put DATABASE_URL
+            if url=$(node scripts/pick-database-url.mjs); then
+              printf '%s' "$url" | npx wrangler secret put DATABASE_URL
+            else
+              echo "::error::DATABASE_URL could not connect (see [db] lines above)."; exit 1
+            fi
           else
             echo "No DATABASE_URL repository secret; keeping the Worker's existing value."
           fi
