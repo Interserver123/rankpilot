@@ -325,6 +325,6 @@ export async function enqueueOrganic(sql: Sql, input: OrganicEnqueueInput): Prom
     budgetOverride: input.budgetOverride,
   });
   // Hosts without a background worker (Vercel) process the job right after the response.
-  if (queued.kind === "queued") scheduleInlineRun();
+  if (queued.kind === "queued" || queued.kind === "duplicate") scheduleInlineRun();
   return queued;
 }

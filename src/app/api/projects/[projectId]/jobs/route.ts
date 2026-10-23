@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/server/auth";
 import { projectRelation } from "@/server/relations";
 import { canProject } from "@/lib/permissions";
 import { sql } from "@/server/db";
+import { scheduleInlineRun } from "@/server/jobs/inline";
 
 export const dynamic = "force-dynamic";
 
@@ -21,5 +22,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
     from tracking_jobs j left join tracking_job_targets t on t.job_id = j.id
     where j.project_id = ${projectId} and j.status in ('queued', 'running', 'awaiting_approval')
     group by j.id order by j.created_at`;
+  // No background worker on this host: a viewed queued job gets processed after this response.
+  if (jobs.some((j) => j.status === "queued")) scheduleInlineRun();
   return NextResponse.json({ jobs }, { headers: { "Cache-Control": "no-store" } });
 }

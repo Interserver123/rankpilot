@@ -14,8 +14,16 @@ export function inlineWorkerEnabled(): boolean {
 
 const BUDGET_MS = 45_000; // inside the 60 s function limit; unstarted keywords are picked up by the next run
 
+let running = false; // one inline pass per instance at a time; claimJob also prevents double processing
+
 /** Claims and processes queued jobs until none are ready or the time budget is used. */
 export async function runJobsInline(budgetMs = BUDGET_MS): Promise<{ processed: number }> {
+  if (running) return { processed: 0 };
+  running = true;
+  try { return await runLoop(budgetMs); } finally { running = false; }
+}
+
+async function runLoop(budgetMs: number): Promise<{ processed: number }> {
   const deadlineAt = Date.now() + budgetMs;
   let processed = 0;
   while (Date.now() < deadlineAt) {
