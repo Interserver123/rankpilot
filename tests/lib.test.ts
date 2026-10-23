@@ -1,0 +1,166 @@
+import { describe, expect, it } from "vitest";
+import { advanceSchedule, firstRunAt } from "@/lib/schedule";
+import { averagePosition, rankChange, rankDistribution, formatRankChange } from "@/lib/ranking";
+import { generateGrid, gridMetrics } from "@/lib/grid";
+import { checkBudget, estimateLlm, estimateMaps, estimateOrganic } from "@/lib/cost";
+import { dedupeKeywordConfigs, parseKeywordCsv, csvCell, normalizeKeyword } from "@/lib/keywords";
+import { canOrg, canProject } from "@/lib/permissions";
+import { normalizeDomain, urlMatchesDomain, isValidDomain } from "@/lib/domain";
+import { backoffDelayMs, parseRetryAfter } from "@/lib/retry";
+
+describe("schedule", () => {
+  const spec = { intervalValue: 7, intervalUnit: "day" as const, preferredRunTime: "06:00", timezone: "America/Chicago" };
+
+  it("first run is the next preferred local time, stored in UTC", () => {
+    // 2026-03-02 10:00 Chicago (CST, UTC-6) → already past 06:00, so next day 06:00 CST = 12:00Z
+    const now = new Date("2026-03-02T16:00:00Z");
+    expect(firstRunAt(spec, now).toISOString()).toBe("2026-03-03T12:00:00.000Z");
+    // 05:00 local → today at 06:00
+    expect(firstRunAt(spec, new Date("2026-03-02T11:00:00Z")).toISOString()).toBe("2026-03-02T12:00:00.000Z");
+  });
+
+  it("keeps the local wall-clock time across DST changes", () => {
+    // DST starts 2026-03-08 in the US. 06:00 CDT = 11:00Z.
+    const due = new Date("2026-03-03T12:00:00Z");
+    const r = advanceSchedule(spec, due, new Date("2026-03-03T12:00:01Z"));
+    expect(r.nextRunAt.toISOString()).toBe("2026-03-10T11:00:00.000Z");
+    expect(r.missedSlots).toBe(0);
+  });
+
+  it("counts missed slots without backfilling", () => {
+    const due = new Date("2026-01-05T12:00:00Z");
+    const r = advanceSchedule(spec, due, new Date("2026-01-27T00:00:00Z"));
+    expect(r.missedSlots).toBe(3); // Jan 12, 19 and 26 (06:00 local) all passed
+    expect(r.nextRunAt.toISOString()).toBe("2026-02-02T12:00:00.000Z");
+  });
+
+  it("supports monthly intervals and rejects bad input", () => {
+    const m = { ...spec, intervalValue: 1, intervalUnit: "month" as const, timezone: "UTC" };
+    expect(advanceSchedule(m, new Date("2026-01-31T06:00:00Z"), new Date("2026-01-31T07:00:00Z")).nextRunAt.toISOString())
+      .toBe("2026-02-28T06:00:00.000Z");
+    expect(() => firstRunAt({ ...spec, timezone: "Mars/Base" }, new Date())).toThrow();
+    expect(() => firstRunAt({ ...spec, preferredRunTime: "25:00" }, new Date())).toThrow();
+  });
+});
+
+describe("ranking", () => {
+  it("computes changes including entering and dropping out", () => {
+    expect(rankChange({ status: "ranked", position: 3 }, { status: "ranked", position: 7 })).toEqual({ kind: "moved", from: 7, to: 3, delta: 4 });
+    expect(rankChange({ status: "not_found", depth: 100 }, { status: "ranked", position: 7 })).toEqual({ kind: "dropped_out", from: 7 });
+    expect(rankChange({ status: "ranked", position: 9 }, { status: "not_found", depth: 100 })).toEqual({ kind: "entered", to: 9 });
+    expect(rankChange({ status: "ranked", position: 9 }, null)).toEqual({ kind: "new" });
+    expect(rankChange(null, null)).toEqual({ kind: "no_data" });
+    expect(formatRankChange({ kind: "moved", from: 10, to: 12, delta: -2 })).toBe("▼ 2");
+  });
+
+  it("never treats missing or not-found as a position", () => {
+    const ranks = [{ status: "ranked" as const, position: 2 }, { status: "ranked" as const, position: 12 }, { status: "not_found" as const, depth: 100 }, null];
+    expect(averagePosition(ranks)).toEqual({ average: 7, counted: 2 });
+    const d = rankDistribution(ranks);
+    expect(d.buckets.top3).toBe(1);
+    expect(d.buckets.top20).toBe(1);
+    expect(d.buckets.notFound).toBe(1);
+    expect(d.noData).toBe(1);
+    expect(d.measured).toBe(3);
+  });
+});
+
+describe("grid", () => {
+  it("generates a centred grid with correct spacing", () => {
+    const pts = generateGrid(30, -97, 3, 3, 1000);
+    expect(pts).toHaveLength(9);
+    const center = pts.find((p) => p.row === 1 && p.col === 1)!;
+    expect(center).toMatchObject({ lat: 30, lng: -97 });
+    const north = pts.find((p) => p.row === 0 && p.col === 1)!;
+    expect((north.lat - 30) * 111_195).toBeCloseTo(1000, -1); // ~1km north
+    expect(() => generateGrid(30, -97, 0, 3, 1000)).toThrow();
+  });
+
+  it("excludes failed points from metrics", () => {
+    const m = gridMetrics([
+      { status: "ranked", position: 1 }, { status: "ranked", position: 5 }, { status: "not_found" }, { status: "failed" },
+    ], 20);
+    expect(m).toMatchObject({ validPoints: 3, failedPoints: 1, averagePosition: 3, top3Pct: 33.3, top10Pct: 66.7, resultDepth: 20 });
+    expect(gridMetrics([{ status: "failed" }], 20).averagePosition).toBeNull();
+  });
+});
+
+describe("cost", () => {
+  it("estimates per PRD formulas and refuses to guess unknown prices", () => {
+    expect(estimateOrganic(50, 1, { pricePerUnit: 0.002, currency: "USD" })).toEqual({ units: 50, amount: 0.1, currency: "USD" });
+    expect(estimateOrganic(50, 1, { pricePerUnit: null, currency: "USD" }).amount).toBeNull();
+    expect(estimateMaps(5, 5, 3, 1, { pricePerUnit: null, currency: "USD" }).units).toBe(75);
+    expect(estimateLlm(10, 2, 3, { pricePerUnit: 0.01, currency: "USD" }).amount).toBe(0.6);
+  });
+
+  it("checks budgets", () => {
+    expect(checkBudget({ limit: 100, spent: 50, alertThresholdPct: 80 }, 10)).toMatchObject({ allowed: true, warning: false });
+    expect(checkBudget({ limit: 100, spent: 75, alertThresholdPct: 80 }, 10)).toMatchObject({ allowed: true, warning: true });
+    expect(checkBudget({ limit: 100, spent: 95, alertThresholdPct: 80 }, 10)).toMatchObject({ allowed: false, reason: "would_exceed" });
+    expect(checkBudget({ limit: 100, spent: 100, alertThresholdPct: 80 }, null)).toMatchObject({ allowed: false, reason: "limit_reached" });
+  });
+});
+
+describe("keywords", () => {
+  it("dedupes only identical configurations", () => {
+    const base = { locationId: "L1", searchEngine: "google", language: "en", device: "desktop" as const };
+    const { unique, duplicates } = dedupeKeywordConfigs([
+      { ...base, keyword: "Plumber  Austin" },
+      { ...base, keyword: "plumber austin" },
+      { ...base, keyword: "plumber austin", device: "mobile" },
+      { ...base, keyword: "plumber austin", locationId: "L2" },
+    ]);
+    expect(unique).toHaveLength(3);
+    expect(duplicates).toHaveLength(1);
+    expect(normalizeKeyword("  Café   Near ME ")).toBe("café near me");
+  });
+
+  it("parses CSV with header, validation and plain lists", () => {
+    const { rows, errors } = parseKeywordCsv("keyword,device,tags,target_url\nplumber austin,mobile,emergency;Local,https://x.com/a\n,desktop,,\nbad,tablet,,\n");
+    expect(rows).toEqual([{ keyword: "plumber austin", device: "mobile", tags: ["emergency", "local"], targetUrl: "https://x.com/a", location: undefined, language: undefined }]);
+    expect(errors.map((e) => e.row)).toEqual([3, 4]);
+    expect(parseKeywordCsv("one\ntwo\n").rows.map((r) => r.keyword)).toEqual(["one", "two"]);
+  });
+
+  it("neutralizes CSV formula injection", () => {
+    expect(csvCell("=HYPERLINK(1)")).toBe("'=HYPERLINK(1)");
+    expect(csvCell('a,"b"')).toBe('"a,""b"""');
+  });
+});
+
+describe("permissions", () => {
+  it("enforces role boundaries", () => {
+    expect(canOrg("admin", "budget.manage")).toBe(true);
+    expect(canOrg("manager", "budget.manage")).toBe(false);
+    expect(canOrg("manager", "project.create")).toBe(true);
+    expect(canOrg("member", "project.create")).toBe(false);
+    expect(canProject({ kind: "org", role: "member", assigned: false }, "project.view")).toBe(false);
+    expect(canProject({ kind: "org", role: "member", assigned: true }, "scan.manual")).toBe(true);
+    expect(canProject({ kind: "org", role: "manager", assigned: false }, "keyword.manage")).toBe(true);
+    expect(canProject({ kind: "org", role: "manager", assigned: false }, "client_access.manage")).toBe(false);
+    expect(canProject({ kind: "client", role: "viewer" }, "project.view")).toBe(true);
+    expect(canProject({ kind: "client", role: "viewer" }, "scan.manual")).toBe(false);
+    expect(canProject({ kind: "client", role: "viewer_with_refresh" }, "scan.manual")).toBe(true);
+    expect(canProject({ kind: "client", role: "viewer" }, "keyword.manage")).toBe(false);
+    expect(canProject({ kind: "none" }, "project.view")).toBe(false);
+  });
+});
+
+describe("domain & retry", () => {
+  it("normalizes and matches domains", () => {
+    expect(normalizeDomain("HTTPS://www.Example.com/path?q")).toBe("example.com");
+    expect(urlMatchesDomain("https://blog.example.com/x", "example.com")).toBe(true);
+    expect(urlMatchesDomain("https://notexample.com/x", "example.com")).toBe(false);
+    expect(isValidDomain("example")).toBe(false);
+    expect(isValidDomain("sub.example.co.uk")).toBe(true);
+  });
+
+  it("backs off exponentially with a cap and parses Retry-After", () => {
+    expect(backoffDelayMs(1, 1000, 60_000, () => 1)).toBe(1000);
+    expect(backoffDelayMs(3, 1000, 60_000, () => 1)).toBe(4000);
+    expect(backoffDelayMs(20, 1000, 60_000, () => 1)).toBe(60_000);
+    expect(parseRetryAfter("120")).toBe(120_000);
+    expect(parseRetryAfter("Wed, 21 Oct 2026 07:28:00 GMT", Date.parse("Wed, 21 Oct 2026 07:27:00 GMT"))).toBe(60_000);
+    expect(parseRetryAfter(null)).toBeNull();
+  });
+});
