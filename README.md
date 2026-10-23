@@ -120,7 +120,7 @@ npm run deploy                           # OpenNext build + wrangler deploy (wor
 
 ## Known limitations / next steps
 
-- **Provider validation pending.** Run the PRD §18 evaluation (small keyword set across locations, compare with manual checks) before relying on DataForSEO data. The unit assumption (1 billable request per keyword up to depth 100) should be checked against your plan; actual cost from responses is recorded when DataForSEO returns it.
+- **Provider validation pending.** Run the PRD §18 evaluation (small keyword set across locations, compare with manual checks) before relying on DataForSEO data. Billing is modelled per 10 results (Live list price 0.002 USD, from dataforseo.com/pricing); confirm against your plan. Actual cost from responses is recorded when DataForSEO returns it. Only the Live endpoint is implemented (the queued modes are cheaper but slower).
 - YepAPI: implemented from its public llms.txt only. City targeting (`location_name` as “City,Region,Country”) and the per-page price are unverified against live responses; run the PRD §18 check. Other providers: add adapters in `src/server/providers/serp/` and register them in `registry.ts` and `PROVIDER_SPECS`.
 - Rate limiting for sign-in / refresh / export is in-memory per process. Use a shared store (e.g. Redis) if you run several web instances.
 - Job/observation timestamps on the job pages render in UTC; project pages use the project time zone.

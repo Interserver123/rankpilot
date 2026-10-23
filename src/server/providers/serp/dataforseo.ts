@@ -78,7 +78,7 @@ export function parseDataForSeoResponse(body: unknown, req: SerpRequest, request
     requestedLocation,
     depth: req.depth,
     providerRequestId: task.id ?? null,
-    unitsConsumed: 1,
+    unitsConsumed: Math.ceil(req.depth / 10),
     actualCost: typeof task.cost === "number" ? task.cost : null,
     organic,
     metadata: { check_url: result.check_url ?? null, provider_datetime: result.datetime ?? null, organic_results: organic.length },
@@ -127,14 +127,15 @@ export class DataForSeoProvider implements SerpProvider {
     return errs;
   }
 
-  // Assumption: one billable request per task up to the configured depth. Check your plan's
-  // pricing for deeper results; actual cost is taken from the provider response when present.
-  unitsPerRequest() { return 1; }
+  // Billed per SERP page of 10 results (dataforseo.com/pricing/google-serp), so depth 100 = 10 units.
+  // Actual cost is taken from the provider response when present.
+  unitsPerRequest(depth: number) { return Math.ceil(depth / 10); }
 
+  // Live mode list price: $0.002 per 10 results. Override with your contracted price.
   pricePerUnit() {
     const v = providerValue("dataforseo", "costPerRequest");
     const n = v === undefined ? NaN : Number(v);
-    return Number.isFinite(n) && n >= 0 ? n : null;
+    return Number.isFinite(n) && n >= 0 ? n : 0.002;
   }
 
   currency() { return "USD"; }

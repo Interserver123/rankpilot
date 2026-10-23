@@ -40,7 +40,10 @@ export const PROVIDER_SPECS: ProviderSpec[] = [
     fields: [
       { key: "login", label: "API login", secret: true, env: "DATAFORSEO_LOGIN" },
       { key: "password", label: "API password", secret: true, env: "DATAFORSEO_PASSWORD", help: "The API password, not your website password." },
-      { key: "costPerRequest", label: "Price per request (USD)", secret: false, env: "DATAFORSEO_COST_PER_REQUEST", placeholder: "from your plan", help: "Leave blank if unknown; estimates then show as unknown." },
+      { key: "costPerRequest", label: "Price per 10 results (USD)", secret: false, env: "DATAFORSEO_COST_PER_REQUEST", placeholder: "0.002", help: "Live mode list price is 0.002 per 10 results. Leave blank to use it, or enter your contracted price." },
+      { key: "baselineDepth", label: "Search depth for a keyword's first check (results)", secret: false, env: "DATAFORSEO_BASELINE_DEPTH", placeholder: "30", help: "30 = 3 pages. Set 100 for a full first check." },
+      { key: "probeDepth", label: "Search depth for keywords not ranking (results)", secret: false, env: "DATAFORSEO_PROBE_DEPTH", placeholder: "30" },
+      { key: "fullCheckDays", label: "Full-depth re-check every (days)", secret: false, env: "DATAFORSEO_FULL_CHECK_DAYS", placeholder: "28" },
     ],
   },
 ];
