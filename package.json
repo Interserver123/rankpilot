@@ -5,7 +5,7 @@
   "description": "RankPilot \u2014 SEO operations, local rank tracking and search intelligence",
   "scripts": {
     "dev": "next dev",
-    "build": "tsx scripts/bundle-migrations.ts && opennextjs-cloudflare build",
+    "build": "node scripts/build.mjs",
     "start": "next start",
     "worker": "tsx --env-file-if-exists=.env.local scripts/worker.ts",
     "migrate": "tsx --env-file-if-exists=.env.local scripts/migrate.ts",

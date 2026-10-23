@@ -70,7 +70,8 @@ function create(perRequestClient = false): postgres.Sql {
   const opts = connectionOptions(url);
   return postgres(url, {
     ssl: opts.ssl,
-    max: perRequestClient ? 3 : Number(process.env.DATABASE_POOL_SIZE ?? 10),
+    // Serverless hosts (Vercel) run many instances at once: keep each one small.
+    max: perRequestClient ? 3 : Number(process.env.DATABASE_POOL_SIZE ?? (process.env.VERCEL ? 3 : 10)),
     idle_timeout: perRequestClient ? 5 : 30,
     connect_timeout: 10,
     onnotice: () => {},

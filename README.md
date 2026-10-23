@@ -94,6 +94,15 @@ Integration tests cover the defaults, dedupe, partial batches, retries, auth-sto
 
 TLS is enabled automatically for Supabase hosts, and prepared statements are disabled on the transaction pooler (port 6543). Supabase is only the database here; sign-in uses RankPilot's built-in accounts unless you also set the Supabase Auth keys.
 
+## Deploying to Vercel (recommended, simplest)
+
+1. Go to vercel.com → **Sign up / Log in with GitHub** → **Add New… → Project** → import `Interserver123/rankpilot` (allow Vercel access to the repository when asked).
+2. Framework is detected as **Next.js**; leave the build settings alone (`npm run build` builds the Node version automatically on Vercel).
+3. Open **Environment Variables** and add `DATABASE_URL` = your Supabase **Transaction pooler** string. Optional: `OWNER_EMAIL`, `OWNER_SETUP_CODE`.
+4. Click **Deploy**, then open `https://<your-app>.vercel.app/api/health` (should show `"status":"ok"`) and `/sign-in`.
+
+`vercel.json` pins functions to the Mumbai region (`bom1`) next to the Supabase database for low latency. The background job worker (`npm run worker`) still needs a separate always-on Node host.
+
 ## Deploying to Cloudflare Workers
 
 ```bash
