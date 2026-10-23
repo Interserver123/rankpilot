@@ -14,7 +14,8 @@ export async function ensureSchema(sql: Sql): Promise<{ applied: string[] }> {
   } catch (e) {
     // Wrong Supabase pooler cluster (aws-0 vs aws-1): retry once on the other one.
     const err = e as { code?: string; message?: string };
-    if ((/Tenant or user not found/i.test(err.message ?? "") || err.code === "ENOTFOUND") && (await useAlternatePooler())) {
+    const connectionClass = /Tenant or user not found|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|CONNECT_TIMEOUT|CONNECTION_|socket|tls|ssl|closed|timed? ?out|network/i;
+    if ((connectionClass.test(`${err.code ?? ""} ${err.message ?? ""}`)) && (await useAlternatePooler())) {
       console.warn("[db] retrying on the alternate Supabase pooler cluster");
       return applyPending(sql);
     }
@@ -60,5 +61,11 @@ export function classifyDbError(e: unknown): SetupProblem {
     return { kind: "cannot_connect", detail: `Could not connect to the database: ${why} (${code}).` };
   }
   if (/^42/.test(code)) return { kind: "schema", detail: `The database schema is incomplete (${code}). Run the migrations.` };
-  return { kind: "unknown", detail: `Database error${code ? ` ${code}` : ""}.` };
+  return { kind: "unknown", detail: `Database error${code ? ` ${code}` : ""}: ${safeMessage(err?.message)}` };
+}
+
+/** Error text with anything credential-like removed, shortened for display. */
+export function safeMessage(message: string | undefined): string {
+  const m = (message ?? "no details").replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, "[url]").replace(/\b[0-9a-f]{24,}\b/gi, "[secret]").replace(/\s+/g, " ").trim();
+  return m.slice(0, 200) || "no details";
 }

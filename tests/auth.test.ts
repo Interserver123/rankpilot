@@ -3,7 +3,7 @@ import type postgres from "postgres";
 import { generateTemporaryPassword, hashPassword, passwordProblem, verifyPassword } from "@/server/passwords";
 import { AccountError, changeOwnPassword, claimOwner, hasOrganization, ownerState, passwordSignIn, setMemberPassword, setupFirstAdmin } from "@/server/accounts";
 import { removeMember, addMember } from "@/server/services/admin";
-import { classifyDbError, ensureSchema } from "@/server/schema";
+import { classifyDbError, ensureSchema, safeMessage } from "@/server/schema";
 import { bundledMigrationsSource } from "../scripts/bundle-migrations";
 import { readFile } from "node:fs/promises";
 import { resolveSession, revokeSession } from "@/server/sessions";
@@ -35,6 +35,12 @@ describe("passwords", () => {
 process.env.OWNER_EMAIL = "owner@agency.test";
 
 describe("setup helpers", () => {
+  it("never leaks urls or secrets in error details", () => {
+    const m = safeMessage("failed postgresql://u:8454103c69daea0b65cce1ad7fb2a44ad220da924e5bcff8@h:6543/db and 8454103c69daea0b65cce1ad7fb2a44ad220da924e5bcff8");
+    expect(m).not.toMatch(/8454|postgresql:/);
+    expect(classifyDbError(new Error("boom")).detail).toContain("boom");
+  });
+
   it("bundled migrations are up to date with supabase/migrations", async () => {
     expect(await readFile("src/server/migrations.generated.ts", "utf8")).toBe(await bundledMigrationsSource());
   });
