@@ -56,7 +56,15 @@ npm run dev                    # http://localhost:3000
 npm run worker                 # separate terminal: scheduler + job processing
 ```
 
-Dev sign-in accepts any email (disabled when `NODE_ENV=production`). The **first** user to sign in when no organization exists becomes its admin; everyone else must be added under **Settings → Team** first.
+### Signing in
+
+By default RankPilot uses built-in **email + password** sign-in (scrypt-hashed passwords, revocable server-side sessions):
+
+1. Open `/sign-in` on a fresh database: it shows **Set up your workspace**. Enter your name, agency, email and a password (10+ characters). You become the admin.
+2. Add teammates under **Settings → Team**. Each new member gets a one-time temporary password to share with them; they can change it under **Settings → My account**.
+3. Forgotten passwords: an admin clicks **Reset password** next to the member (this signs them out everywhere).
+
+Alternatives: set the Supabase keys to use Supabase Auth, or set `AUTH_MODE=dev` for email-only sign-in during local development (ignored in production).
 
 ### Tests
 
@@ -70,7 +78,7 @@ Integration tests cover the defaults, dedupe, partial batches, retries, auth-sto
 
 ## Production setup
 
-1. **Supabase**: create a project, run the migrations (`supabase db push` or `npm run migrate` with the direct connection string). Disable public sign-ups in Auth settings. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`; leave `AUTH_MODE` unset.
+1. **Database**: run the migrations (`npm run migrate`, or `supabase db push` on Supabase). Built-in password sign-in works out of the box; serve the app over HTTPS (session cookies are `Secure` in production). To use Supabase Auth instead, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` and disable public sign-ups in Supabase. Leave `AUTH_MODE` unset.
 2. **Web app**: deploy Next.js (e.g. Vercel) with `DATABASE_URL` (server-only).
 3. **Worker**: run `npm run worker` as a long-lived process (Railway, Fly.io, Render, a VM). Do not run collection inside web requests. Optionally call `GET /api/cron/schedule` with `Authorization: Bearer $CRON_SECRET` from a cron service instead of relying on the worker's scheduler loop.
 4. **Provider**: set `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, and your contracted `DATAFORSEO_COST_PER_REQUEST` (leave blank if unknown: estimates then show "unknown" instead of a guess). Never set `PROVIDER_MOCK_ENABLED` in production (it is ignored when `NODE_ENV=production`).

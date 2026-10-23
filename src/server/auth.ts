@@ -6,6 +6,7 @@ import { createServerClient } from "@supabase/ssr";
 import { sql } from "./db";
 import type { OrgRole } from "@/lib/permissions";
 import { provisionUser } from "./users";
+import { resolveSession, SESSION_COOKIE } from "./sessions";
 
 export const DEV_COOKIE = "rp_dev_session";
 
@@ -24,6 +25,15 @@ export function supabaseConfigured(): boolean {
 export function devAuthEnabled(): boolean {
   if (process.env.NODE_ENV === "production") return false;
   return process.env.AUTH_MODE === "dev" && !supabaseConfigured();
+}
+
+export type AuthMode = "supabase" | "dev" | "password";
+
+/** Supabase when configured; email-only dev sign-in only when explicitly enabled outside production; otherwise built-in passwords. */
+export function authMode(): AuthMode {
+  if (supabaseConfigured()) return "supabase";
+  if (devAuthEnabled()) return "dev";
+  return "password";
 }
 
 function authSecret(): string {
@@ -82,14 +92,30 @@ export const authIdentity = cache(async (): Promise<{ authId: string | null; ema
     const email = token ? verifyDevSession(token) : null;
     return email ? { authId: `dev:${email.toLowerCase()}`, email } : null;
   }
-  return null;
+  const id = await passwordSessionUserId();
+  if (!id) return null;
+  const [u] = await sql<{ email: string }[]>`select email from users where id = ${id}`;
+  return u ? { authId: null, email: u.email } : null;
+});
+
+/** User id behind the built-in password session cookie (memoized per request). */
+const passwordSessionUserId = cache(async (): Promise<string | null> => {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  return token ? resolveSession(sql, token) : null;
 });
 
 /** Current user for this request (memoized per request). */
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
-  const identity = await authIdentity();
-  if (!identity) return null;
-  const user = await provisionUser(sql, identity.authId, identity.email);
+  let user: { id: string; email: string; name: string | null; status: string } | null | undefined;
+  if (authMode() === "password") {
+    const id = await passwordSessionUserId();
+    if (!id) return null;
+    [user] = await sql<{ id: string; email: string; name: string | null; status: string }[]>`select id, email, name, status from users where id = ${id}`;
+  } else {
+    const identity = await authIdentity();
+    if (!identity) return null;
+    user = await provisionUser(sql, identity.authId, identity.email);
+  }
   if (!user || user.status !== "active") return null;
   const [m] = await sql<{ organization_id: string; role: OrgRole }[]>`
     select organization_id, role from organization_members where user_id = ${user.id} order by created_at limit 1`;
