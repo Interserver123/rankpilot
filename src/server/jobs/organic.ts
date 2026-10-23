@@ -6,6 +6,7 @@ import { DEFAULT_DEPTH_OPTIONS, planDepth, type DepthPlan } from "@/lib/depth-pl
 import { limiterFor } from "../providers/rate-limiter";
 import { providerValue, refreshProviderCredentials } from "../providers/credentials";
 import { defaultSerpProvider, getSerpProvider } from "../providers/registry";
+import { scheduleInlineRun } from "./inline";
 import { enqueueJob, finalizeJob, heartbeat, type EnqueueResult, type JobRow, type JobStatus } from "./queue";
 
 export const DEFAULT_RESULT_DEPTH = 100;
@@ -73,6 +74,8 @@ export async function loadDepthPlans(sql: Sql, provider: SerpProvider, keywordId
 export interface ProcessOptions {
   workerId: string;
   requestTimeoutMs?: number;
+  /** Epoch ms after which no new keyword is started (serverless time limit). Unstarted keywords stay pending. */
+  deadlineAt?: number;
   targetConcurrency?: number;
   now?: () => Date;
 }
@@ -112,11 +115,13 @@ export async function processSerpJob(sql: Sql, job: JobRow, opts: ProcessOptions
   const limiter = limiterFor(provider.id, provider.limits().requestsPerMinute);
   let retryAfterMs = 0;
   let fatal: { code: string; message: string } | undefined;
+  let timedOut = false;
   const queue = [...targets];
 
   const worker = async () => {
     for (;;) {
       if (fatal) return;
+      if (opts.deadlineAt && Date.now() > opts.deadlineAt) { timedOut = true; return; }
       const t = queue.shift();
       if (!t) return;
       await processTarget(t);
@@ -226,6 +231,8 @@ export async function processSerpJob(sql: Sql, job: JobRow, opts: ProcessOptions
 
   const concurrency = Math.max(1, Math.min(opts.targetConcurrency ?? 3, provider.limits().maxConcurrency));
   await Promise.all(Array.from({ length: concurrency }, worker));
+  // Stopped for time, not failure: hand the job back without using up one of its attempts.
+  if (timedOut) await sql`update tracking_jobs set attempts = greatest(attempts - 1, 0) where id = ${job.id}`;
   return finalizeJob(sql, job, { retryAfterMs, now: now(), fatalError: fatal });
 }
 
@@ -299,7 +306,7 @@ export async function enqueueOrganic(sql: Sql, input: OrganicEnqueueInput): Prom
   }
   const price = provider.pricePerUnit();
   const expectedUnits = rows.length ? (await plannedUnits(sql, provider, input.projectId, rows.map((r) => r.id))) / rows.length : provider.unitsPerRequest(DEFAULT_RESULT_DEPTH);
-  return enqueueJob(sql, {
+  const queued = await enqueueJob(sql, {
     organizationId: project.organization_id,
     projectId: input.projectId,
     trackingConfigId: input.trackingConfigId ?? null,
@@ -317,4 +324,7 @@ export async function enqueueOrganic(sql: Sql, input: OrganicEnqueueInput): Prom
     currency: provider.currency(),
     budgetOverride: input.budgetOverride,
   });
+  // Hosts without a background worker (Vercel) process the job right after the response.
+  if (queued.kind === "queued") scheduleInlineRun();
+  return queued;
 }

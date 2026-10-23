@@ -13,7 +13,7 @@ const STALE_AFTER_MS = 10 * 60_000;
  * One worker pass: recover stale jobs, then claim and process jobs for each configured provider
  * up to its concurrency limit. Returns the number of jobs processed.
  */
-export async function runWorkerPass(sql: Sql, opts: { requestTimeoutMs?: number } = {}): Promise<{ processed: number; statuses: JobStatus[] }> {
+export async function runWorkerPass(sql: Sql, opts: { requestTimeoutMs?: number; deadlineAt?: number } = {}): Promise<{ processed: number; statuses: JobStatus[] }> {
   await refreshProviderCredentials(sql);
   await reapStaleJobs(sql, STALE_AFTER_MS);
   const statuses: JobStatus[] = [];
@@ -25,7 +25,7 @@ export async function runWorkerPass(sql: Sql, opts: { requestTimeoutMs?: number 
       if (!job) break;
       running.push((async () => {
         try {
-          statuses.push(await processSerpJob(sql, job, { workerId, requestTimeoutMs: opts.requestTimeoutMs }));
+          statuses.push(await processSerpJob(sql, job, { workerId, requestTimeoutMs: opts.requestTimeoutMs, deadlineAt: opts.deadlineAt }));
         } catch (e) {
           // Bookkeeping failure: settle the job so it is not left running forever.
           console.error(`job ${job.id} crashed`, e);

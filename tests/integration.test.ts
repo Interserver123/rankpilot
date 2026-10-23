@@ -302,4 +302,17 @@ d("integration (requires DATABASE_URL_TEST)", () => {
       clearCredentialCache();
     }
   });
+
+  it("stops starting keywords at the deadline and hands the job back without using an attempt", async () => {
+    const { projectId } = await newProject(["a b", "c d"], { activate: true });
+    const [job] = await sql<{ id: string }[]>`select id from tracking_jobs where project_id = ${projectId} and status = 'queued'`;
+    const claimed = await claimJob(sql, "mock", 10, "w1");
+    expect(claimed?.id).toBe(job!.id);
+    const status = await processSerpJob(sql, claimed!, { workerId: "w1", deadlineAt: Date.now() - 1 });
+    expect(status).toBe("queued");
+    const [after] = await sql<{ attempts: number }[]>`select attempts from tracking_jobs where id = ${job!.id}`;
+    expect(after!.attempts).toBe(0);
+    const [pending] = await sql<{ n: number }[]>`select count(*)::int as n from tracking_job_targets where job_id = ${job!.id} and status = 'pending'`;
+    expect(pending!.n).toBe(2);
+  });
 });

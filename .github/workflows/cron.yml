@@ -1,0 +1,16 @@
+name: Scheduler tick
+# Calls the app every 10 minutes so scheduled rankings start on time and queued jobs finish.
+# Needs two repository secrets: APP_URL (e.g. https://your-app.vercel.app) and CRON_SECRET (same value as on Vercel).
+on:
+  schedule: [{ cron: "*/10 * * * *" }]
+  workflow_dispatch: {}
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.APP_URL != '' && secrets.CRON_SECRET != '' }}
+    steps:
+      - name: Call the scheduler endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: curl --fail --silent --show-error --max-time 70 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/schedule"
