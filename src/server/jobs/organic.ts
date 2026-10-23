@@ -2,6 +2,7 @@ import type { Sql } from "../db";
 import { audit } from "../audit";
 import { ProviderError, type SerpProvider, type SerpRequest } from "../providers/types";
 import { limiterFor } from "../providers/rate-limiter";
+import { refreshProviderCredentials } from "../providers/credentials";
 import { defaultSerpProvider, getSerpProvider } from "../providers/registry";
 import { enqueueJob, finalizeJob, heartbeat, type EnqueueResult, type JobRow, type JobStatus } from "./queue";
 
@@ -177,6 +178,7 @@ export interface OrganicEnqueueInput {
 }
 
 export async function organicEstimate(sql: Sql, projectId: string, keywordIds: string[] | null) {
+  await refreshProviderCredentials(sql);
   const provider = defaultSerpProvider();
   const [{ n } = { n: 0 }] = await sql<{ n: number }[]>`
     select count(*)::int as n from keywords where project_id = ${projectId} and is_active
@@ -193,6 +195,7 @@ export async function organicEstimate(sql: Sql, projectId: string, keywordIds: s
 }
 
 export async function enqueueOrganic(sql: Sql, input: OrganicEnqueueInput): Promise<EnqueueResult | { kind: "no_provider" }> {
+  await refreshProviderCredentials(sql);
   const [project] = await sql<{ organization_id: string; status: string }[]>`
     select organization_id, status from projects where id = ${input.projectId}`;
   if (!project) throw new Error("Project not found");

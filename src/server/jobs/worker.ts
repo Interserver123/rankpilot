@@ -1,5 +1,6 @@
 import { hostname } from "node:os";
 import type { Sql } from "../db";
+import { refreshProviderCredentials } from "../providers/credentials";
 import { listSerpProviders } from "../providers/registry";
 import { claimJob, finalizeJob, reapStaleJobs, type JobStatus } from "./queue";
 import { processSerpJob } from "./organic";
@@ -13,6 +14,7 @@ const STALE_AFTER_MS = 10 * 60_000;
  * up to its concurrency limit. Returns the number of jobs processed.
  */
 export async function runWorkerPass(sql: Sql, opts: { requestTimeoutMs?: number } = {}): Promise<{ processed: number; statuses: JobStatus[] }> {
+  await refreshProviderCredentials(sql);
   await reapStaleJobs(sql, STALE_AFTER_MS);
   const statuses: JobStatus[] = [];
   const running: Promise<void>[] = [];

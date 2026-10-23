@@ -1,13 +1,20 @@
+import { randomBytes } from "node:crypto";
 import { requireStaff } from "@/server/authz";
-import { describeProviders } from "@/server/providers/registry";
+import { canOrg } from "@/lib/permissions";
+import { defaultSerpProvider, describeProviders } from "@/server/providers/registry";
+import { PROVIDER_SPECS, credentialStatus, encryptionConfigured } from "@/server/providers/credentials";
+import { KeyForm } from "./key-form";
 import { formatMoney } from "@/lib/cost";
 import { Badge, Card, PageHeader } from "@/components/ui";
 
 export const metadata = { title: "Integrations" };
 
 export default async function IntegrationsPage() {
-  await requireStaff();
+  const user = await requireStaff();
+  const canSave = canOrg(user.role, "integration.manage");
   const providers = describeProviders();
+  const active = defaultSerpProvider();
+  const hasEncryptionKey = encryptionConfigured();
   const planned = [
     { name: "Google Search Console", phase: "Phase 4", note: "OAuth 2.0 with the read-only webmasters scope; property selected per project." },
     { name: "Google Analytics 4", phase: "Phase 4", note: "OAuth 2.0 with the analytics read-only scope; GA4 Data API." },
@@ -17,8 +24,17 @@ export default async function IntegrationsPage() {
   ];
   return (
     <div className="space-y-6">
-      <PageHeader title="Integrations" subtitle="Provider credentials live in server environment variables and are never sent to the browser." />
+      <PageHeader title="Integrations" subtitle="API keys are encrypted on the server and never sent back to the browser. A key saved here overrides a server environment variable." />
+      {canSave && !hasEncryptionKey && (
+        <div className="rounded-xl border border-warn/40 bg-warn/10 p-4 text-sm">
+          <div className="font-semibold">One-time setup before you can save keys</div>
+          <p className="mt-1 text-muted">Add an environment variable named <code>APP_ENCRYPTION_KEY</code> on your host (Vercel → Settings → Environment Variables), then redeploy. Use this value, and keep a copy; if it is lost or changed, saved keys must be re-entered:</p>
+          <code className="mt-2 block break-all rounded-lg bg-panel px-2 py-1 font-mono text-xs">{randomBytes(32).toString("hex")}</code>
+        </div>
+      )}
+      {!canSave && <p className="text-sm text-muted">Only administrators can add or change API keys.</p>}
       <Card title="SERP data providers">
+        <p className="mb-4 text-sm text-muted">{active ? <>Rankings are collected with <span className="font-medium text-text">{active.displayName}</span>. If several providers are connected, the first one listed is used.</> : "No provider is connected yet. Add a key below to start collecting rankings."}</p>
         <div className="grid gap-4 md:grid-cols-2">
           {providers.map((p) => (
             <div key={p.id} className="rounded-lg border border-line bg-panel-2 p-4 text-sm">
@@ -30,7 +46,22 @@ export default async function IntegrationsPage() {
                 <li>Price per request: {p.pricePerUnit === null ? "not configured (estimates shown as unknown)" : formatMoney(p.pricePerUnit, p.currency)}</li>
                 {p.capabilities.limitations.map((l) => <li key={l} className="text-faint">• {l}</li>)}
               </ul>
-              {!p.configured && p.id === "dataforseo" && <p className="mt-3 text-xs text-faint">Set DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD on the server, then restart the app and worker.</p>}
+              {(() => {
+                const spec = PROVIDER_SPECS.find((x) => x.id === p.id);
+                if (!spec) return null;
+                const st = credentialStatus(p.id);
+                return (
+                  <>
+                    <p className="mt-3 text-xs text-faint">
+                      Keys: {st.source === "dashboard" ? "saved in the dashboard" : st.source === "environment" ? "from server environment variables" : "not set"}. Get them at {spec.dashboardHint}.
+                    </p>
+                    {st.unreadable && <p className="mt-2 text-xs text-bad">Saved keys could not be decrypted (APP_ENCRYPTION_KEY changed?). Enter them again.</p>}
+                    {hasEncryptionKey || !canSave
+                      ? <KeyForm providerId={p.id} canSave={canSave && hasEncryptionKey} hasSaved={st.updatedAt !== null} fields={spec.fields.map((f) => ({ ...st.fields.find((x) => x.key === f.key)!, label: f.label, placeholder: f.placeholder, help: f.help }))} />
+                      : <p className="mt-3 text-xs text-faint">Finish the one-time setup above to add keys here.</p>}
+                  </>
+                );
+              })()}
             </div>
           ))}
         </div>

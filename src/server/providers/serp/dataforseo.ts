@@ -1,5 +1,6 @@
 import { parseRetryAfter } from "@/lib/retry";
 import { ProviderError, type SerpProvider, type SerpRequest, type SerpResult, type ProviderCapabilities } from "../types";
+import { providerValue } from "../credentials";
 import { findDomainPosition, type OrganicItem } from "./serp-parse";
 
 /**
@@ -17,11 +18,6 @@ const COUNTRY_NAMES: Record<string, string> = {
   IE: "Ireland", NZ: "New Zealand", DE: "Germany", FR: "France", ES: "Spain", IT: "Italy",
   NL: "Netherlands", BD: "Bangladesh", AE: "United Arab Emirates", SG: "Singapore", ZA: "South Africa",
 };
-
-function env(name: string): string | undefined {
-  const v = process.env[name];
-  return v && v.trim() ? v.trim() : undefined;
-}
 
 export function buildDataForSeoTask(req: SerpRequest): { task: Record<string, unknown>; requestedLocation: string } {
   const task: Record<string, unknown> = {
@@ -103,7 +99,7 @@ export class DataForSeoProvider implements SerpProvider {
   readonly id = "dataforseo";
   readonly displayName = "DataForSEO";
 
-  isConfigured() { return Boolean(env("DATAFORSEO_LOGIN") && env("DATAFORSEO_PASSWORD")); }
+  isConfigured() { return Boolean(providerValue("dataforseo", "login") && providerValue("dataforseo", "password")); }
 
   capabilities(): ProviderCapabilities {
     return {
@@ -135,7 +131,7 @@ export class DataForSeoProvider implements SerpProvider {
   unitsPerRequest() { return 1; }
 
   pricePerUnit() {
-    const v = env("DATAFORSEO_COST_PER_REQUEST");
+    const v = providerValue("dataforseo", "costPerRequest");
     const n = v === undefined ? NaN : Number(v);
     return Number.isFinite(n) && n >= 0 ? n : null;
   }
@@ -144,15 +140,15 @@ export class DataForSeoProvider implements SerpProvider {
 
   limits() {
     return {
-      maxConcurrency: Number(env("DATAFORSEO_MAX_CONCURRENCY") ?? 5),
-      requestsPerMinute: Number(env("DATAFORSEO_REQUESTS_PER_MINUTE") ?? 60),
+      maxConcurrency: Number(process.env.DATAFORSEO_MAX_CONCURRENCY ?? 5),
+      requestsPerMinute: Number(process.env.DATAFORSEO_REQUESTS_PER_MINUTE ?? 60),
     };
   }
 
   async fetchRanking(req: SerpRequest, signal: AbortSignal): Promise<SerpResult> {
     if (!this.isConfigured()) throw new ProviderError("auth", "not_configured", "DataForSEO credentials are not configured");
     const { task, requestedLocation } = buildDataForSeoTask(req);
-    const auth = Buffer.from(`${env("DATAFORSEO_LOGIN")}:${env("DATAFORSEO_PASSWORD")}`).toString("base64");
+    const auth = Buffer.from(`${providerValue("dataforseo", "login")}:${providerValue("dataforseo", "password")}`).toString("base64");
     let res: Response;
     try {
       res = await fetch(ENDPOINT, {

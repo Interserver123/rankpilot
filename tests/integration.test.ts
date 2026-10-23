@@ -10,6 +10,8 @@ import { runWorkerPass } from "@/server/jobs/worker";
 import { runSchedulerTick } from "@/server/jobs/scheduler";
 import { projectRelation } from "@/server/relations";
 import { provisionUser } from "@/server/users";
+import { clearCredentialCache, credentialStatus, providerValue, refreshProviderCredentials, removeProviderCredentials, saveProviderCredentials } from "@/server/providers/credentials";
+import { YepApiProvider } from "@/server/providers/serp/yepapi";
 import { createOrgWithAdmin, hasTestDb, off, resetDatabase, teardown, weekly } from "./helpers/db";
 
 const d = hasTestDb ? describe : describe.skip;
@@ -226,5 +228,30 @@ d("integration (requires DATABASE_URL_TEST)", () => {
     expect((await provisionUser(sql, "auth-3", "Invited@agency.test"))?.authentication_user_id).toBe("auth-3");
     // A different identity cannot take over an already-linked account.
     expect(await provisionUser(sql, "auth-4", "owner@agency.test")).toBeNull();
+  });
+
+  it("stores provider keys encrypted, write-only, and overriding the environment", async () => {
+    process.env.APP_ENCRYPTION_KEY = "test-key-test-key-test-key-1234";
+    delete process.env.YEPAPI_API_KEY;
+    clearCredentialCache();
+    expect(new YepApiProvider().isConfigured()).toBe(false);
+    await saveProviderCredentials(sql, "yepapi", actor.id, { apiKey: "yep_sk_abcdef123456", pricePerPage: "0.02" });
+    const [row] = await sql<{ secrets_enc: string; hints_json: Record<string, string> }[]>`select secrets_enc, hints_json from provider_credentials where provider_id = 'yepapi'`;
+    expect(row!.secrets_enc).not.toContain("abcdef");
+    expect(row!.hints_json.apiKey).toBe("3456");
+    expect(new YepApiProvider().isConfigured()).toBe(true);
+    expect(new YepApiProvider().pricePerUnit()).toBe(0.02);
+    // blank secret keeps the saved one; the UI status never exposes it
+    await saveProviderCredentials(sql, "yepapi", actor.id, { apiKey: "", pricePerPage: "" });
+    expect(providerValue("yepapi", "apiKey")).toBe("yep_sk_abcdef123456");
+    expect(JSON.stringify(credentialStatus("yepapi"))).not.toContain("abcdef");
+    clearCredentialCache();
+    await refreshProviderCredentials(sql, true);
+    expect(new YepApiProvider().isConfigured()).toBe(true);
+    await removeProviderCredentials(sql, "yepapi");
+    expect(new YepApiProvider().isConfigured()).toBe(false);
+    await expect(saveProviderCredentials(sql, "nope", actor.id, {})).rejects.toThrow();
+    delete process.env.APP_ENCRYPTION_KEY;
+    await expect(saveProviderCredentials(sql, "yepapi", actor.id, { apiKey: "x".repeat(20) })).rejects.toThrow(/APP_ENCRYPTION_KEY/);
   });
 });

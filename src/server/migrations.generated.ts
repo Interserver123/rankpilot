@@ -15,5 +15,9 @@ export const MIGRATIONS: { name: string; sql: string }[] = [
   {
     "name": "20261024000004_org_owner.sql",
     "sql": "-- The workspace owner: always an admin, cannot be removed, demoted or have their password reset by others.\nalter table organizations add column if not exists owner_user_id uuid references users(id) on delete set null;\n"
+  },
+  {
+    "name": "20261025000005_provider_credentials.sql",
+    "sql": "-- Provider API keys and settings entered by an admin in the dashboard.\n-- Secrets are AES-256-GCM encrypted by the app (key from APP_ENCRYPTION_KEY); the database never sees plaintext.\ncreate table provider_credentials (\n  provider_id text primary key,\n  secrets_enc text,                              -- encrypted JSON {field: value}\n  hints_json jsonb not null default '{}'::jsonb, -- {field: \"last 4 characters\"} for display only\n  settings_json jsonb not null default '{}'::jsonb, -- non-secret settings, e.g. price per request\n  updated_by uuid references users(id) on delete set null,\n  updated_at timestamptz not null default now()\n);\n\nalter table provider_credentials enable row level security;\n"
   }
 ];

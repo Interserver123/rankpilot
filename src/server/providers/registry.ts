@@ -1,8 +1,9 @@
 import type { SerpProvider } from "./types";
 import { DataForSeoProvider } from "./serp/dataforseo";
+import { YepApiProvider } from "./serp/yepapi";
 import { MockSerpProvider } from "./serp/mock";
 
-const serpProviders: SerpProvider[] = [new DataForSeoProvider(), new MockSerpProvider()];
+const serpProviders: SerpProvider[] = [new DataForSeoProvider(), new YepApiProvider(), new MockSerpProvider()];
 
 export function listSerpProviders(): SerpProvider[] {
   return serpProviders;

@@ -4,6 +4,7 @@ import { alternatePoolerUrl, databaseUrl, isCloudflareWorkers, sql } from "@/ser
 import { probePostgres } from "@/server/db-probe";
 import { classifyDbError, ensureSchema } from "@/server/schema";
 import { MIGRATIONS } from "@/server/migrations.generated";
+import { refreshProviderCredentials } from "@/server/providers/credentials";
 import { defaultSerpProvider } from "@/server/providers/registry";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
   try {
     await ensureSchema(sql);
     const [r] = await sql<{ n: number }[]>`select count(*)::int as n from schema_migrations`;
+    await refreshProviderCredentials(sql);
     database = { ok: true, migrationsApplied: r?.n ?? 0, migrationsBundled: MIGRATIONS.length };
   } catch (e) {
     console.error("[health] database check failed", e);

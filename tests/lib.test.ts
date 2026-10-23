@@ -183,3 +183,56 @@ describe("supabase pooler fallback", () => {
     expect(alternatePoolerUrl("postgres://u:p@localhost:5432/db")).toBeNull();
   });
 });
+
+describe("provider credentials", () => {
+  it("encrypts secrets round-trip and rejects tampering or a wrong key", async () => {
+    const { encryptSecrets, decryptSecrets } = await import("@/server/providers/credentials");
+    process.env.APP_ENCRYPTION_KEY = "test-key-test-key-test-key-1234";
+    const blob = encryptSecrets({ apiKey: "yep_sk_secret" });
+    expect(blob).not.toContain("yep_sk_secret");
+    expect(decryptSecrets(blob)).toEqual({ apiKey: "yep_sk_secret" });
+    expect(() => decryptSecrets(blob.slice(0, -2) + "AA")).toThrow();
+    process.env.APP_ENCRYPTION_KEY = "another-key-another-key-0000000";
+    expect(() => decryptSecrets(blob)).toThrow();
+    delete process.env.APP_ENCRYPTION_KEY;
+  });
+});
+
+describe("yepapi adapter", () => {
+  const req = {
+    keyword: "plumber austin", language: "en", device: "mobile" as const, googleDomain: "google.com", depth: 30,
+    targetDomain: "acme.com", competitorDomains: [{ id: "c1", domain: "rival.com" }],
+    location: { countryCode: "US", city: "Austin", region: "Texas" },
+  };
+
+  it("builds country and city requests and prices per 10 results", async () => {
+    const { buildYepApiBody, YepApiProvider } = await import("@/server/providers/serp/yepapi");
+    expect(buildYepApiBody(req)).toEqual({
+      body: { query: "plumber austin", depth: 30, device: "mobile", language: "en", location_name: "Austin,Texas,United States" },
+      requestedLocation: "city: Austin,Texas,United States",
+    });
+    expect(buildYepApiBody({ ...req, location: { countryCode: "GB" } }).body).toMatchObject({ location: "gb" });
+    const p = new YepApiProvider();
+    expect(p.unitsPerRequest(30)).toBe(3);
+    expect(p.unitsPerRequest(100)).toBe(10);
+    expect(p.pricePerUnit()).toBe(0.01);
+  });
+
+  it("parses positions, verified absence, and maps error codes", async () => {
+    const { parseYepApiResponse, classifyYepApiError } = await import("@/server/providers/serp/yepapi");
+    const ok = { ok: true, data: { totalResults: 99, items: [
+      { position: 1, title: "A", url: "https://rival.com/x", domain: "rival.com" },
+      { position: 4, title: "Acme", url: "https://www.acme.com/plumber", domain: "acme.com" },
+    ] } };
+    const r = parseYepApiResponse(ok, req, "country: US");
+    expect(r).toMatchObject({ position: 4, rankingUrl: "https://www.acme.com/plumber", unitsConsumed: 3, actualCost: null });
+    expect(r.competitors).toEqual([{ id: "c1", position: 1, url: "https://rival.com/x" }]);
+    expect(parseYepApiResponse({ ok: true, data: { items: [] } }, req, "x").position).toBeNull();
+    expect(() => parseYepApiResponse({ ok: false, error: { code: "NO_CREDITS", message: "empty" } }, req, "x")).toThrowError(/empty/);
+    expect(classifyYepApiError("INVALID_API_KEY", "x").kind).toBe("auth");
+    expect(classifyYepApiError("NO_CREDITS", "x").kind).toBe("insufficient_funds");
+    expect(classifyYepApiError("VALIDATION_ERROR", "x").kind).toBe("invalid_request");
+    expect(classifyYepApiError("RATE_LIMITED_UPSTREAM", "x").retryable).toBe(true);
+    expect(classifyYepApiError("UPSTREAM_TIMEOUT", "x").retryable).toBe(true);
+  });
+});

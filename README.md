@@ -10,7 +10,8 @@ An agency-first SEO operations platform. This release is the PRD's recommended M
 |---|---|
 | Projects, clients, multi-location setup, competitors | ✅ 6-step wizard; nothing besides details + one location is required |
 | Keywords | ✅ Manual + CSV import, tags, bulk pause/resume/tag/delete. Dedupe never merges different location/device/engine/language |
-| Organic SERP tracking | ✅ DataForSEO adapter (Live Advanced) + a clearly labelled mock provider for development |
+| Organic SERP tracking | ✅ DataForSEO (Live Advanced) and YepAPI (Google SERP) adapters + a clearly labelled mock provider for development |
+| API keys | ✅ Admins add, test and remove provider keys under Integrations; encrypted at rest (AES-256-GCM, `APP_ENCRYPTION_KEY`), write-only, audited |
 | Scheduling | ✅ 7-day default; organic/maps/LLM/citations each have their own interval, run time, enabled state. Uses the project's time zone (DST-safe), stores UTC |
 | Manual refresh | ✅ Keyword / selected / all. Runs as an async job with a cost confirmation, deduped at the target level, never changes the schedule |
 | Job system | ✅ Postgres-backed queue, idempotency, per-provider concurrency + rate limits, `Retry-After`, exponential backoff, bounded retries, partial results, stale-worker recovery |
@@ -81,7 +82,7 @@ Integration tests cover the defaults, dedupe, partial batches, retries, auth-sto
 1. **Database**: run the migrations (`npm run migrate`, or `supabase db push` on Supabase). Built-in password sign-in works out of the box; serve the app over HTTPS (session cookies are `Secure` in production). To use Supabase Auth instead, set `AUTH_PROVIDER=supabase`, `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` and disable public sign-ups in Supabase. Leave `AUTH_MODE` unset.
 2. **Web app**: deploy Next.js (e.g. Vercel) with `DATABASE_URL` (server-only).
 3. **Worker**: run `npm run worker` as a long-lived process (Railway, Fly.io, Render, a VM). Do not run collection inside web requests. Optionally call `GET /api/cron/schedule` with `Authorization: Bearer $CRON_SECRET` from a cron service instead of relying on the worker's scheduler loop.
-4. **Provider**: set `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, and your contracted `DATAFORSEO_COST_PER_REQUEST` (leave blank if unknown: estimates then show "unknown" instead of a guess). Never set `PROVIDER_MOCK_ENABLED` in production (it is ignored when `NODE_ENV=production`).
+4. **Provider**: set `APP_ENCRYPTION_KEY` and add keys in-app under **Integrations**, or set `YEPAPI_API_KEY` / `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, and your contracted `DATAFORSEO_COST_PER_REQUEST` (leave blank if unknown: estimates then show "unknown" instead of a guess). Never set `PROVIDER_MOCK_ENABLED` in production (it is ignored when `NODE_ENV=production`).
 5. **Budgets**: add an organization-wide budget under **Usage & Costs** before scaling keyword counts.
 
 ## Using Supabase as the database
@@ -119,7 +120,7 @@ npm run deploy                           # OpenNext build + wrangler deploy (wor
 ## Known limitations / next steps
 
 - **Provider validation pending.** Run the PRD §18 evaluation (small keyword set across locations, compare with manual checks) before relying on DataForSEO data. The unit assumption (1 billable request per keyword up to depth 100) should be checked against your plan; actual cost from responses is recorded when DataForSEO returns it.
-- YepAPI and other SERP providers are not implemented; add them as adapters in `src/server/providers/serp/`.
+- YepAPI: implemented from its public llms.txt only. City targeting (`location_name` as “City,Region,Country”) and the per-page price are unverified against live responses; run the PRD §18 check. Other providers: add adapters in `src/server/providers/serp/` and register them in `registry.ts` and `PROVIDER_SPECS`.
 - Rate limiting for sign-in / refresh / export is in-memory per process. Use a shared store (e.g. Redis) if you run several web instances.
 - Job/observation timestamps on the job pages render in UTC; project pages use the project time zone.
 - Phase 3+ modules (Maps, Google OAuth, LLM, citations, client dashboards, PDF reports) are not built yet.

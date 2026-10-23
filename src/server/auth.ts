@@ -8,6 +8,7 @@ import type { OrgRole } from "@/lib/permissions";
 import { provisionUser } from "./users";
 import { resolveSession, SESSION_COOKIE } from "./sessions";
 import { ensureSchema } from "./schema";
+import { refreshProviderCredentials } from "./providers/credentials";
 
 export const DEV_COOKIE = "rp_dev_session";
 
@@ -113,6 +114,7 @@ const passwordSessionUserId = cache(async (): Promise<string | null> => {
 /** Current user for this request (memoized per request). */
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   await ensureSchema(sql);
+  await refreshProviderCredentials(sql);
   let user: { id: string; email: string; name: string | null; status: string } | null | undefined;
   if (authMode() === "password") {
     const id = await passwordSessionUserId();
