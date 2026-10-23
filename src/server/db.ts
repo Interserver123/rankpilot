@@ -64,14 +64,14 @@ export async function useAlternatePooler(): Promise<boolean> {
   return true;
 }
 
-function create(perRequest = false): postgres.Sql {
+function create(perRequestClient = false): postgres.Sql {
   const url = databaseUrl();
   if (!url) throw new DatabaseConfigError("DATABASE_URL is not set");
   const opts = connectionOptions(url);
   return postgres(url, {
     ssl: opts.ssl,
-    max: perRequest ? 1 : Number(process.env.DATABASE_POOL_SIZE ?? 10),
-    idle_timeout: perRequest ? 5 : 30,
+    max: perRequestClient ? 3 : Number(process.env.DATABASE_POOL_SIZE ?? 10),
+    idle_timeout: perRequestClient ? 5 : 30,
     connect_timeout: 10,
     onnotice: () => {},
     prepare: opts.prepare,
@@ -83,11 +83,26 @@ function create(perRequest = false): postgres.Sql {
   });
 }
 
-/** One client per request on Workers (React `cache` is scoped to the current request). */
-const requestSql = cache((_url: string | null) => create(true));
+/**
+ * One client per request on Workers. Cloudflare's free plan allows ~50 outbound connections per
+ * request, so every query in a request must share a small client instead of dialing anew.
+ * OpenNext exposes the current request's ExecutionContext (unique per request) on a global symbol;
+ * React `cache` is the fallback where that is unavailable (it is only request-scoped during rendering).
+ */
+const perRequest = new WeakMap<object, postgres.Sql>();
+const reactScoped = cache((_url: string | null) => create(true));
+
+function requestClient(): postgres.Sql {
+  const cf = (globalThis as Record<symbol, { ctx?: object } | undefined>)[Symbol.for("__cloudflare-context__")];
+  const key = cf?.ctx;
+  if (!key) return reactScoped(databaseUrl());
+  let client = perRequest.get(key);
+  if (!client) { client = create(true); perRequest.set(key, client); }
+  return client;
+}
 
 export function getSql(): postgres.Sql {
-  if (isCloudflareWorkers) return requestSql(databaseUrl());
+  if (isCloudflareWorkers) return requestClient();
   if (!globalThis.__rankpilotSql) globalThis.__rankpilotSql = create();
   return globalThis.__rankpilotSql;
 }
