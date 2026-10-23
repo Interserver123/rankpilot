@@ -19,5 +19,9 @@ export const MIGRATIONS: { name: string; sql: string }[] = [
   {
     "name": "20261025000005_provider_credentials.sql",
     "sql": "-- Provider API keys and settings entered by an admin in the dashboard.\n-- Secrets are AES-256-GCM encrypted by the app (key from APP_ENCRYPTION_KEY); the database never sees plaintext.\ncreate table provider_credentials (\n  provider_id text primary key,\n  secrets_enc text,                              -- encrypted JSON {field: value}\n  hints_json jsonb not null default '{}'::jsonb, -- {field: \"last 4 characters\"} for display only\n  settings_json jsonb not null default '{}'::jsonb, -- non-secret settings, e.g. price per request\n  updated_by uuid references users(id) on delete set null,\n  updated_at timestamptz not null default now()\n);\n\nalter table provider_credentials enable row level security;\n"
+  },
+  {
+    "name": "20261026000006_smart_depth_cache.sql",
+    "sql": "-- Short-lived cache of raw organic results so identical searches are not paid for twice,\n-- and per-usage-row savings so the app can show what smart depth and the cache saved.\ncreate table serp_cache (\n  cache_key text primary key,\n  provider text not null,\n  depth integer not null,\n  requested_location text not null,\n  organic_json jsonb not null,\n  features_json jsonb not null default '[]'::jsonb,\n  fetched_at timestamptz not null default now()\n);\ncreate index serp_cache_fetched_idx on serp_cache (fetched_at);\nalter table serp_cache enable row level security;\n\nalter table provider_usage add column saved_units numeric(12, 4) not null default 0;\nalter table provider_usage add column saved_cost numeric(12, 6) not null default 0;\n"
   }
 ];

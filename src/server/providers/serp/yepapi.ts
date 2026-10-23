@@ -83,6 +83,7 @@ export function parseYepApiResponse(body: unknown, req: SerpRequest, requestedLo
     unitsConsumed: Math.ceil(req.depth / PAGE_SIZE),
     actualCost: null,
     metadata: { organic_results: organic.length, total_results: b.data?.totalResults ?? null },
+    organic,
   };
 }
 

@@ -236,3 +236,25 @@ describe("yepapi adapter", () => {
     expect(classifyYepApiError("UPSTREAM_TIMEOUT", "x").retryable).toBe(true);
   });
 });
+
+describe("adaptive depth plan", () => {
+  const base = { maxDepth: 100, pageSize: 10, probeDepth: 30, fullCheckDays: 28, bufferRanks: 5, competitorFloor: null, now: new Date("2026-10-23T00:00:00Z") };
+  it("checks near the last rank, then escalates only on a miss", async () => {
+    const { planDepth } = await import("@/lib/depth-plan");
+    expect(planDepth(null, null, base)).toEqual({ depth: 100, reason: "baseline", escalate: false });
+    expect(planDepth({ status: "ranked", position: 3 }, null, base)).toEqual({ depth: 10, reason: "near_last_rank", escalate: true });
+    expect(planDepth({ status: "ranked", position: 8 }, null, base).depth).toBe(20);
+    expect(planDepth({ status: "ranked", position: 97 }, null, base)).toMatchObject({ depth: 100, escalate: false });
+  });
+  it("probes keywords that were not found and re-checks fully when stale", async () => {
+    const { planDepth } = await import("@/lib/depth-plan");
+    const nf = { status: "not_found" as const, position: null };
+    expect(planDepth(nf, new Date("2026-10-10T00:00:00Z"), base)).toEqual({ depth: 30, reason: "probe", escalate: false });
+    expect(planDepth(nf, new Date("2026-08-01T00:00:00Z"), base)).toMatchObject({ depth: 100, reason: "periodic_full" });
+    expect(planDepth(nf, null, base).depth).toBe(100);
+  });
+  it("keeps a minimum depth when competitors are tracked", async () => {
+    const { planDepth } = await import("@/lib/depth-plan");
+    expect(planDepth({ status: "ranked", position: 3 }, null, { ...base, competitorFloor: 30 })).toMatchObject({ depth: 30, reason: "competitor_floor", escalate: true });
+  });
+});

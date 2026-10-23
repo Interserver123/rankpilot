@@ -41,6 +41,13 @@ export default async function UsagePage() {
         </Card>
       </div>
 
+      {usage.saved.units > 0 && (
+        <Card title="Saved by smart depth and caching">
+          <div className="text-3xl font-semibold text-good">{formatMoney(usage.saved.cost)}</div>
+          <p className="mt-1 text-sm text-muted">{formatNumber(usage.saved.units)} billable units avoided this month versus checking every keyword at full depth. Keywords that ranked recently are checked a few pages deep, repeated searches are reused for a short time, and a miss repeats at full depth.</p>
+        </Card>
+      )}
+
       <Card title="By project and module">
         {usage.byProject.length === 0 ? <p className="text-sm text-muted">No usage recorded this month.</p> : (
           <table className="table"><thead><tr><th>Project</th><th>Module</th><th className="text-right">Units</th><th className="text-right">Cost</th></tr></thead>

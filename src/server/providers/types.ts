@@ -70,6 +70,8 @@ export interface SerpResult {
   /** Cost reported by the provider, when it reports one. */
   actualCost: number | null;
   metadata: Record<string, unknown>;
+  /** Every organic result returned (position, url, title), when available. Enables the shared SERP cache. */
+  organic?: { position: number; url: string; title: string | null }[];
 }
 
 export interface SerpProvider {

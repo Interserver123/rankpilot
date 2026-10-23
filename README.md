@@ -11,6 +11,7 @@ An agency-first SEO operations platform. This release is the PRD's recommended M
 | Projects, clients, multi-location setup, competitors | ✅ 6-step wizard; nothing besides details + one location is required |
 | Keywords | ✅ Manual + CSV import, tags, bulk pause/resume/tag/delete. Dedupe never merges different location/device/engine/language |
 | Organic SERP tracking | ✅ DataForSEO (Live Advanced) and YepAPI (Google SERP) adapters + a clearly labelled mock provider for development |
+| Cost saving | ✅ For page-priced providers (YepAPI): adaptive depth (a keyword that ranked at #3 is checked 1 page deep; a miss repeats at full depth; not-ranking keywords probe 30 deep, full re-check every 28 days; competitors keep ≥30), plus a 30-minute shared SERP cache. Savings shown on Usage & Costs |
 | API keys | ✅ Admins add, test and remove provider keys under Integrations; encrypted at rest (AES-256-GCM, `APP_ENCRYPTION_KEY`), write-only, audited |
 | Scheduling | ✅ 7-day default; organic/maps/LLM/citations each have their own interval, run time, enabled state. Uses the project's time zone (DST-safe), stores UTC |
 | Manual refresh | ✅ Keyword / selected / all. Runs as an async job with a cost confirmation, deduped at the target level, never changes the schedule |

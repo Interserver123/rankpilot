@@ -80,6 +80,7 @@ export function parseDataForSeoResponse(body: unknown, req: SerpRequest, request
     providerRequestId: task.id ?? null,
     unitsConsumed: 1,
     actualCost: typeof task.cost === "number" ? task.cost : null,
+    organic,
     metadata: { check_url: result.check_url ?? null, provider_datetime: result.datetime ?? null, organic_results: organic.length },
   };
 }

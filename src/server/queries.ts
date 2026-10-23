@@ -231,7 +231,10 @@ export async function usageSummary(db: Db, organizationId: string, now = new Dat
       sum(coalesce(units_consumed, units_requested))::float8 as units
     from provider_usage where organization_id = ${organizationId} and recorded_at >= ${since}
     group by 1 order by 1`;
-  return { since, byProvider, byProject, daily };
+  const [saved] = await db<{ units: number; cost: number }[]>`
+    select coalesce(sum(saved_units), 0)::float8 as units, coalesce(sum(saved_cost), 0)::float8 as cost
+    from provider_usage where organization_id = ${organizationId} and recorded_at >= ${since}`;
+  return { since, byProvider, byProject, daily, saved: saved ?? { units: 0, cost: 0 } };
 }
 
 export async function listBudgets(db: Db, organizationId: string) {

@@ -254,4 +254,52 @@ d("integration (requires DATABASE_URL_TEST)", () => {
     delete process.env.APP_ENCRYPTION_KEY;
     await expect(saveProviderCredentials(sql, "yepapi", actor.id, { apiKey: "x".repeat(20) })).rejects.toThrow(/APP_ENCRYPTION_KEY/);
   });
+
+  it("pays for a few pages when a keyword ranked before, escalates on a miss, and reuses cached searches", async () => {
+    process.env.APP_ENCRYPTION_KEY = "test-key-test-key-test-key-1234";
+    process.env.YEPAPI_API_KEY = "k";
+    clearCredentialCache();
+    const { projectId } = await newProject(["plumber austin"], { activate: true });
+    const [kw] = await sql<{ id: string }[]>`select id from keywords where project_id = ${projectId}`;
+    const [job0] = await sql<{ id: string }[]>`select id from tracking_jobs where project_id = ${projectId} order by created_at limit 1`;
+    await sql`insert into serp_observations (keyword_id, job_id, provider, requested_location, device, result_depth, collected_at, result_status, position, result_metadata_json)
+      values (${kw!.id}, ${job0!.id}, 'yepapi', 'x', 'desktop', 100, now() - interval '7 days', 'ranked', 3, '{}')`;
+    const calls: number[] = [];
+    const items = (depth: number, withTarget: boolean) => Array.from({ length: depth }, (_, i) => ({ position: i + 1, title: "t", url: withTarget && i + 1 === 4 ? "https://acmeplumbing.com/x" : `https://other${i}.com/` }));
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_u: unknown, init: RequestInit) => {
+      const depth = JSON.parse(String(init.body)).depth as number;
+      calls.push(depth);
+      return new Response(JSON.stringify({ ok: true, data: { items: items(depth, depth >= 20) } }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      await sql`delete from serp_cache`;
+      const { enqueueOrganic, loadDepthPlans } = await import("@/server/jobs/organic");
+      const { YepApiProvider } = await import("@/server/providers/serp/yepapi");
+      const plans = await loadDepthPlans(sql, new YepApiProvider(), [kw!.id], 100, false, new Date());
+      expect(plans.get(kw!.id)).toMatchObject({ depth: 10, escalate: true });
+      await sql`update tracking_jobs set status = 'cancelled' where project_id = ${projectId}`;
+      await enqueueOrganic(sql, { projectId, keywordIds: null, trigger: "manual", requestedByUserId: actor.id });
+      await runWorkerPass(sql);
+      // first call 1 page misses (target is at 4 only in deeper SERPs), then the full-depth repeat finds it
+      expect(calls).toEqual([10, 100]);
+      const [obs] = await sql<{ result_status: string; position: number; result_depth: number }[]>`select result_status, position, result_depth from serp_observations where keyword_id = ${kw!.id} order by collected_at desc limit 1`;
+      expect(obs).toMatchObject({ result_status: "ranked", position: 4, result_depth: 100 });
+      const [u] = await sql<{ units: number; saved: number }[]>`select sum(units_requested)::float8 as units, sum(saved_units)::float8 as saved from provider_usage where project_id = ${projectId}`;
+      expect(u!.units).toBe(11);
+      // an immediate second refresh is served entirely from the cache: no new paid calls
+      await enqueueOrganic(sql, { projectId, keywordIds: null, trigger: "manual", requestedByUserId: actor.id });
+      calls.length = 0;
+      await runWorkerPass(sql);
+      expect(calls).toEqual([]);
+      const [u2] = await sql<{ units: number; saved: number }[]>`select sum(units_requested)::float8 as units, sum(saved_units)::float8 as saved from provider_usage where project_id = ${projectId}`;
+      expect(u2!.units).toBe(11);
+      expect(u2!.saved).toBeGreaterThan(0);
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.YEPAPI_API_KEY;
+      delete process.env.APP_ENCRYPTION_KEY;
+      clearCredentialCache();
+    }
+  });
 });

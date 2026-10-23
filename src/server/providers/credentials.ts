@@ -27,6 +27,8 @@ export const PROVIDER_SPECS: ProviderSpec[] = [
     fields: [
       { key: "apiKey", label: "API key", secret: true, env: "YEPAPI_API_KEY", placeholder: "yep_sk_…" },
       { key: "pricePerPage", label: "Price per 10 results (USD)", secret: false, env: "YEPAPI_PRICE_PER_PAGE", placeholder: "0.01", help: "Google SERP is billed per page of 10 results. Default 0.01." },
+      { key: "probeDepth", label: "Search depth for keywords not ranking (results)", secret: false, env: "YEPAPI_PROBE_DEPTH", placeholder: "30", help: "Keywords not found last time are checked this deep (30 = 3 pages) instead of 100. Set 100 to always check fully." },
+      { key: "fullCheckDays", label: "Full-depth re-check every (days)", secret: false, env: "YEPAPI_FULL_CHECK_DAYS", placeholder: "28", help: "Keywords not ranking get a full-depth check at least this often." },
     ],
   },
   {
