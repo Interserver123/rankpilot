@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { authMode } from "@/server/auth";
-import { isCloudflareWorkers, sql } from "@/server/db";
+import { alternatePoolerUrl, databaseUrl, isCloudflareWorkers, sql } from "@/server/db";
+import { probePostgres } from "@/server/db-probe";
 import { classifyDbError, ensureSchema } from "@/server/schema";
 import { MIGRATIONS } from "@/server/migrations.generated";
 import { defaultSerpProvider } from "@/server/providers/registry";
@@ -8,7 +9,7 @@ import { defaultSerpProvider } from "@/server/providers/registry";
 export const dynamic = "force-dynamic";
 
 /** Deployment self-check. Reports only configuration status, never secrets or connection strings. */
-export async function GET() {
+export async function GET(req: NextRequest) {
   let database: { ok: boolean; problem?: string; migrationsApplied?: number; migrationsBundled: number } = { ok: false, migrationsBundled: MIGRATIONS.length };
   try {
     await ensureSchema(sql);
@@ -18,11 +19,19 @@ export async function GET() {
     console.error("[health] database check failed", e);
     database = { ok: false, problem: classifyDbError(e).detail, migrationsBundled: MIGRATIONS.length };
   }
+  // /api/health?probe=1 — step-by-step connection test (Workers only; spends a few outbound connections).
+  let probe: Awaited<ReturnType<typeof probePostgres>>[] | undefined;
+  const url = databaseUrl();
+  if (req.nextUrl.searchParams.get("probe") === "1" && isCloudflareWorkers && url) {
+    const alt = alternatePoolerUrl(url);
+    probe = [await probePostgres(url), ...(alt ? [await probePostgres(alt)] : [])];
+  }
   return NextResponse.json({
     status: database.ok ? "ok" : "degraded",
     runtime: isCloudflareWorkers ? "cloudflare-workers" : "node",
     auth: authMode(),
     database,
     serpProviderConfigured: Boolean(defaultSerpProvider()),
+    ...(probe ? { probe } : {}),
   }, { status: database.ok ? 200 : 503, headers: { "Cache-Control": "no-store" } });
 }
