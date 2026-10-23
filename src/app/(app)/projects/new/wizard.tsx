@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { parseKeywordCsv, normalizeTags, dedupeKeywordConfigs } from "@/lib/keywords";
 import { describeInterval, type IntervalUnit } from "@/lib/schedule";
 import { ScheduleEditor, type Sched } from "@/components/schedule-editor";
@@ -35,8 +35,13 @@ export function ProjectWizard({ serpProvider, timezones }: {
   const [step, setStep] = useState(0);
   const [details, setDetails] = useState({
     name: "", domain: "", clientName: "", businessCategory: "", country: "US", language: "en",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", notes: "",
+    timezone: "UTC", notes: "",
   });
+  // Default to the browser's time zone after mount (the server render cannot know it).
+  useEffect(() => {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz && timezones.includes(tz)) setDetails((d) => (d.timezone === "UTC" ? { ...d, timezone: tz } : d));
+  }, [timezones]);
   const [competitors, setCompetitors] = useState<{ name: string; domain: string }[]>([]);
   const [locations, setLocations] = useState<Loc[]>([emptyLoc()]);
   const [keywords, setKeywords] = useState<Kw[]>([]);
@@ -93,13 +98,15 @@ export function ProjectWizard({ serpProvider, timezones }: {
 
   return (
     <div className="space-y-4">
-      <ol className="flex flex-wrap gap-2 text-xs">
+      <ol className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-line bg-panel p-3 shadow-[var(--shadow-card)]">
         {STEPS.map((s, i) => (
-          <li key={s}>
-            <button type="button" onClick={() => (i < step ? setStep(i) : undefined)}
-              className={`rounded-full border px-3 py-1 ${i === step ? "border-accent bg-accent/15 text-ink" : i < step ? "border-line text-muted hover:text-ink" : "border-line text-faint"}`}>
-              {i + 1}. {s}
+          <li key={s} className="flex flex-1 items-center gap-2">
+            <button type="button" onClick={() => (i < step ? setStep(i) : undefined)} disabled={i > step}
+              className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-2 py-1.5 text-sm font-medium ${i === step ? "text-ink" : i < step ? "text-muted hover:text-ink" : "text-faint"}`}>
+              <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold ${i === step ? "bg-accent text-white ring-4 ring-accent/15" : i < step ? "bg-accent-soft text-accent" : "bg-panel-2 text-faint"}`}>{i < step ? "✓" : i + 1}</span>
+              <span className="hidden lg:inline">{s}</span>
             </button>
+            {i < STEPS.length - 1 && <span className={`h-px min-w-4 flex-1 ${i < step ? "bg-accent" : "bg-line"}`} />}
           </li>
         ))}
       </ol>

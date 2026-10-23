@@ -5,5 +5,5 @@ export const metadata = { title: "Reports" };
 
 export default async function Page() {
   await requireStaff();
-  return <PlannedModule title="Reports" phase="Phase 7">Scheduled and on-demand client reports will appear here.</PlannedModule>;
+  return <PlannedModule icon="report" title="Reports" phase="Phase 7">Scheduled and on-demand client reports will appear here.</PlannedModule>;
 }

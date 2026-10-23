@@ -20,7 +20,7 @@ export default async function ProjectSettings({ params }: { params: Promise<{ pr
   return (
     <div className="space-y-6">
       <Card title="Project details">
-        <DetailsForm projectId={projectId} disabled={!canEdit} timezones={Intl.supportedValuesOf("timeZone")}
+        <DetailsForm projectId={projectId} disabled={!canEdit} timezones={["UTC", ...Intl.supportedValuesOf("timeZone")]}
           initial={{ name: project.name, domain: project.domain, businessCategory: project.business_category ?? "", timezone: project.timezone, language: project.language, notes: project.notes ?? "" }} />
       </Card>
 

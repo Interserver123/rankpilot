@@ -37,7 +37,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
                 <tr key={p.id}>
                   <td><Link className="font-medium hover:underline" href={`/projects/${p.id}`}>{p.name}</Link><div className="text-xs text-faint">{p.domain}</div></td>
                   <td className="text-muted">{p.client_name}</td>
-                  <td><Badge tone={p.status === "active" ? "good" : p.status === "paused" ? "warn" : "neutral"}>{p.status}</Badge></td>
+                  <td><Badge tone={p.status === "active" ? "good" : p.status === "paused" ? "warn" : "neutral"}><span className="capitalize">{p.status}</span></Badge></td>
                   <td className="text-right tabular-nums">{p.keyword_count}</td>
                   <td className="text-muted" title={formatDateTime(p.last_success_at, p.timezone)}>{relativeTime(p.last_success_at)}</td>
                   <td className="text-muted">{p.next_run_at ? formatDateTime(p.next_run_at, p.timezone) : "Not scheduled"}</td>

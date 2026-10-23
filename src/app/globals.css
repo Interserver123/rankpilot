@@ -1,35 +1,67 @@
 @import "tailwindcss";
 
+/* Design tokens. Light is the default; dark follows the OS preference. */
 @theme {
-  --color-bg: #0b1220;
-  --color-panel: #111a2e;
-  --color-panel-2: #16213a;
-  --color-line: #233152;
-  --color-ink: #e6ebf5;
-  --color-muted: #93a1bd;
-  --color-faint: #64718d;
-  --color-accent: #4f8cff;
-  --color-accent-strong: #2f6fec;
-  --color-good: #34c38f;
-  --color-warn: #f1b44c;
-  --color-bad: #f46a6a;
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-bg: #f4f7f8;
+  --color-panel: #ffffff;
+  --color-panel-2: #f1f5f6;
+  --color-line: #e3eaec;
+  --color-ink: #0f2430;
+  --color-muted: #5b6f7a;
+  --color-faint: #93a4ad;
+  --color-accent: #0e9f8a;
+  --color-accent-strong: #0b8574;
+  --color-accent-soft: #d8f3ee;
+  --color-navy: #0f2a3d;
+  --color-good: #12a376;
+  --color-warn: #d98a12;
+  --color-bad: #e0524f;
+  --color-info: #3b7ddd;
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-grotesk), var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --shadow-card: 0 1px 2px rgb(15 36 48 / 0.04), 0 8px 24px -12px rgb(15 36 48 / 0.12);
 }
 
-html { color-scheme: dark; }
-body { background: var(--color-bg); color: var(--color-ink); font-family: var(--font-sans); font-feature-settings: "tnum" 1; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0a141b;
+    --color-panel: #0f1d26;
+    --color-panel-2: #142631;
+    --color-line: #1f3441;
+    --color-ink: #e6f0f2;
+    --color-muted: #9bb0ba;
+    --color-faint: #66808c;
+    --color-accent: #2cc5ac;
+    --color-accent-strong: #22a892;
+    --color-accent-soft: #123a36;
+    --color-navy: #e6f0f2;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.5);
+  }
+}
+
+html { color-scheme: light dark; }
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 1, "cv11" 1;
+}
 
 @layer components {
-  .card { @apply rounded-xl border border-line bg-panel; }
-  .btn-primary { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 bg-accent text-white hover:bg-accent-strong; }
-  .btn-secondary { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 border border-line bg-panel-2 text-ink hover:border-accent/60; }
-  .btn-danger { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 border border-bad/40 bg-bad/10 text-bad hover:bg-bad/20; }
-  .btn-ghost { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 text-muted hover:bg-panel-2 hover:text-ink; }
-  .input { @apply w-full rounded-lg border border-line bg-bg px-3 py-1.5 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none; }
-  .label { @apply mb-1 block text-xs font-medium uppercase tracking-wide text-muted; }
+  .card { @apply rounded-2xl border border-line bg-panel; box-shadow: var(--shadow-card); }
+  .btn-primary { @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 bg-accent text-white hover:bg-accent-strong shadow-sm; }
+  .btn-secondary { @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 border border-line bg-panel text-ink hover:border-accent/50 hover:text-accent; }
+  .btn-danger { @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 border border-bad/30 bg-bad/10 text-bad hover:bg-bad/15; }
+  .btn-ghost { @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 text-muted hover:bg-panel-2 hover:text-ink; }
+  .input { @apply w-full rounded-xl border border-line bg-panel px-3 py-2 text-sm text-ink placeholder:text-faint focus:border-accent focus:ring-4 focus:ring-accent/10 focus:outline-none transition; }
+  .label { @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted; }
   .table { @apply w-full text-left text-sm; }
-  .table th { @apply border-b border-line px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted whitespace-nowrap; }
-  .table td { @apply border-b border-line/60 px-3 py-2 align-middle; }
-  .table tbody tr:hover { @apply bg-panel-2/60; }
-  .link { @apply text-accent hover:underline; }
+  .table th { @apply border-b border-line px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-faint whitespace-nowrap; }
+  .table td { @apply border-b border-line/70 px-3 py-2.5 align-middle; }
+  .table tbody tr { @apply transition-colors; }
+  .table tbody tr:hover { @apply bg-panel-2/70; }
+  .table tbody tr:last-child td { @apply border-b-0; }
+  .link { @apply font-medium text-accent hover:underline; }
+  .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-wider text-faint; }
 }

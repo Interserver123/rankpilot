@@ -42,11 +42,11 @@ export function ActiveJobs({ projectId }: { projectId: string }) {
   return (
     <div className="mt-4 space-y-2">
       {jobs.map((j) => (
-        <Link key={j.id} href={`/jobs/${j.id}`} className="flex items-center gap-3 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm hover:border-accent">
+        <Link key={j.id} href={`/jobs/${j.id}`} className="flex items-center gap-3 rounded-xl border border-accent/25 bg-accent-soft px-4 py-2.5 text-sm font-medium hover:border-accent">
           <span className={`h-2 w-2 rounded-full ${j.status === "running" ? "animate-pulse bg-accent" : j.status === "awaiting_approval" ? "bg-warn" : "bg-muted"}`} />
           <span className="capitalize">{j.module} {j.trigger} job · {j.status.replace("_", " ")}</span>
           <span className="ml-auto tabular-nums text-muted">{j.done}/{j.total} done{j.failed ? ` · ${j.failed} failed` : ""}</span>
-          <div className="hidden h-1.5 w-32 rounded bg-panel-2 sm:block"><div className="h-1.5 rounded bg-accent" style={{ width: `${j.total ? (j.done / j.total) * 100 : 0}%` }} /></div>
+          <div className="hidden h-1.5 w-32 overflow-hidden rounded-full bg-panel sm:block"><div className="h-1.5 rounded-full bg-accent transition-all" style={{ width: `${j.total ? (j.done / j.total) * 100 : 0}%` }} /></div>
         </Link>
       ))}
     </div>
